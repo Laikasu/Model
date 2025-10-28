@@ -61,7 +61,7 @@ def lru_cache_args(*relevant_functions, maxsize=None):
 
 # Johnsonn and Christy data for gold
 # https://refractiveindex.info/?shelf=main&book=Au&page=Johnson
-with resources.files("model").joinpath('Johnson.csv').open() as file:
+with resources.files("model").joinpath('Johnson.csv').open("r") as file:
     gold = np.genfromtxt(file, delimiter=',', skip_header=1).T
 _gold_wavelen = gold[0]
 _n_gold = gold[1] - 1j*gold[2]

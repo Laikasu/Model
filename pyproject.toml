@@ -14,5 +14,6 @@ dependencies = ["miepython"]             # add dependencies if your model needs 
 
 [tool.setuptools]
 packages = ["model"]  # list all root scripts
+
 [tool.setuptools.package-data]
 model = ["*.csv"]
