@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "model"                # The name you'll use in imports: `import model`
+version = "0.1.0"
+description = "Reusable model package for analysis"
+authors = [{ name = "Casper]", email = "c.f.d.ly@student.tue.nl" }]
+readme = "README.md"          # optional but good practice
+requires-python = ">=3.8"
+dependencies = ["miepython"]             # add dependencies if your model needs them
+
+
+[tool.setuptools]
+py-modules = ["model", "processing"]  # list all root scripts
+[tool.setuptools.package-data]
+model = ["*.csv"]
