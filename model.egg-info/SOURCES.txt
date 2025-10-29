@@ -1,6 +1,8 @@
 README.md
-model.py
 pyproject.toml
+model/Johnson.csv
+model/__init__.py
+model/core.py
 model.egg-info/PKG-INFO
 model.egg-info/SOURCES.txt
 model.egg-info/dependency_links.txt
