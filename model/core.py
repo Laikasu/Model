@@ -96,49 +96,52 @@ n_oil = 1.518
 n_glyc = 1.461
 
 # default design parameters
-ABERRATIONS = False
-n_medium: float = n_water
+defaults = {
+    "aberrations": False,
+    "n_medium": n_water,
+    "n_glass": n_glass,
+    "n_glass0": n_glass,
+    "n_oil0": n_oil,
+    "n_oil": n_oil,
+    "t_oil0": 100e-6,       # micron
+    "t_oil": 100e-6,       # micron
+    "t_glass0": 170e-6,    # micron
+    "t_glass": 170e-6,     # micron
+    "diameter": 30e-9,     # nm
+    "z_p": 0,              # micron
+    "defocus": 0,          # um
+    "wavelen": 532e-9,     # nm
+    "NA": 1.4,
+    "multipolar": True,
+    "roi_size": 2e-6,      # micron
+    "pxsize": 3.45e-6,     # micron
+    "magnification": 60,
+    "scat_mat": "gold",
+    "x0": 0,               # micron
+    "y0": 0,               # micron
+    "r_resolution": 50,
+    # Angles / Polarization
+    "anisotropic": False,
+    "azimuth": 0,           # degrees
+    "inclination": 0,       # degrees
+    "polarized": False,
+    "polarization_azimuth": 0,  # degrees
+    "beam_angle": 0,             # degrees
+    "beam_azimuth": 0            # degrees
+}
 
-t_oil: float = 100e-6 # micron
-t_glass: float = 170e-6 # micron
-
-DIAMETER: float = 30e-9 # nm
-Z_P: float = 0 # micron
-DEFOCUS: float = 0 # um
-WAVELEN: float = 532e-9 # nm
-NA: float = 1.4
-
-
-MULTIPOLAR: bool = True
-
-
-ROI_SIZE: float = 2e-6 # micron
-PXSIZE: float = 3.45e-6 # micron
-MAGNIFICATION: int = 60
-
-SCAT_MAT: str = "gold"
-
-X0: float = 0 #micron
-Y0: float = 0 #micron
-R_RESOLUTION: int = 50
-
-# Angles
-# Particle polarization direction
-ANISOTROPIC = False
-AZIMUTH = 0 # degrees
-INCLINATION = 0 # degrees
-
-# Excitation beam
-POLARIZED: bool = False
-POLARIZATION_AZIMUTH = 0 # degrees
-BEAM_ANGLE = 0 # degrees
-BEAM_AZIMUTH = 0 # degrees
 
     
 
 class Camera():
     """Helper class to handle coordinate conversions"""
-    def __init__(self, x0=X0, y0=Y0, roi_size=ROI_SIZE, pxsize=PXSIZE, magnification=MAGNIFICATION,**kwargs):
+    def __init__(self, **kwargs):
+        roi_size = kwargs['roi_size']
+        pxsize = kwargs['pxsize']
+        magnification = kwargs['magnification']
+        x0 = kwargs['x0']
+        y0 = kwargs['y0']
+
         self.roi_size = roi_size
         self.pxsize = pxsize
         self.magnification = magnification
@@ -152,14 +155,22 @@ class Camera():
         self.phi = np.arctan2(self.y-y0, self.x-x0)
 
 
-def opd(angle_oil, z_p=Z_P, defocus=DEFOCUS, aberrations=ABERRATIONS,
-        n_oil=n_oil, n_oil0=n_oil, n_glass=n_glass, n_glass0=n_glass, n_medium=n_medium,
-        t_glass=t_glass, t_glass0=t_glass, t_oil0=t_oil, **kwargs):
+def opd(angle_oil, **kwargs):
     """
     Optical path difference between the design path of the objective (in focus, z_p = 0, RI's match design, thicknesses match design etc)
     and the actual  path where all parameters can differ.
     """
-    
+    z_p = kwargs['z_p']
+    defocus = kwargs['defocus']
+    aberrations = kwargs['aberrations']
+    n_oil = kwargs['n_oil']
+    n_oil0 = kwargs['n_oil0']
+    n_glass = kwargs['n_glass']
+    n_glass0 = kwargs['n_glass0']
+    n_medium = kwargs['n_medium']
+    t_glass = kwargs['t_glass']
+    t_glass0 = kwargs['t_glass0']
+    t_oil0 = kwargs['t_oil0']
 
     if aberrations:
         # Full opd
@@ -191,15 +202,24 @@ def opd(angle_oil, z_p=Z_P, defocus=DEFOCUS, aberrations=ABERRATIONS,
         
         return n_eff_oil*Dt_oil + excitation_opd
 
-def opd_ref(z_p=Z_P, defocus=DEFOCUS, aberrations=ABERRATIONS,
-        n_oil=n_oil, n_oil0=n_oil, n_glass=n_glass, n_glass0=n_glass, n_medium=n_medium,
-        t_glass=t_glass, t_glass0=t_glass, t_oil0=t_oil, **kwargs):
+def opd_ref(**kwargs):
     """
     Optical path difference of the reference beam from the glass-medium layer to the aperture
     It travels through glass and oil at orthogonal angle.
     """
-    if aberrations:
+    z_p = kwargs['z_p']
+    defocus = kwargs['defocus']
+    aberrations = kwargs['aberrations']
+    n_oil = kwargs['n_oil']
+    n_oil0 = kwargs['n_oil0']
+    n_glass = kwargs['n_glass']
+    n_glass0 = kwargs['n_glass0']
+    n_medium = kwargs['n_medium']
+    t_glass = kwargs['t_glass']
+    t_glass0 = kwargs['t_glass0']
+    t_oil0 = kwargs['t_oil0']
 
+    if aberrations:
         # Phase differences in different media
         glass_opd = t_glass*n_glass - t_glass0*n_glass0
         
@@ -231,14 +251,21 @@ def t_s(n1, angle1, n2, angle2):
     return 2*n1*np.cos(angle1)/(n1*np.cos(angle1) + n2*np.cos(angle2))
 
 
-def B(n, angle_oil, rs, wavelen=WAVELEN, n_oil=n_oil, **kwargs):
+def B(n, angle_oil, rs, **kwargs):
+    wavelen = kwargs['wavelen']
+    n_oil = kwargs['n_oil']
 
     k_0 = -2*np.pi/wavelen
     return np.sqrt(np.cos(angle_oil))*np.sin(angle_oil)*jv(n, k_0*rs*n_oil*np.sin(angle_oil))*np.exp(1j*k_0*opd(angle_oil, **kwargs))
 
 
 epsrel=1e-3
-def Integral_0(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwargs):
+def Integral_0(rs, **kwargs):
+    n_medium = kwargs['n_medium']
+    n_glass = kwargs['n_glass']
+    n_oil = kwargs['n_oil']
+    NA = kwargs['NA']
+
     capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
 
     def integrand(angle_medium):
@@ -255,7 +282,12 @@ def Integral_0(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwa
 
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
-def Integral_1(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwargs):
+def Integral_1(rs, **kwargs):
+    n_medium = kwargs['n_medium']
+    n_glass = kwargs['n_glass']
+    n_oil = kwargs['n_oil']
+    NA = kwargs['NA']
+
     capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
 
     def integrand(angle_medium):
@@ -269,7 +301,12 @@ def Integral_1(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwa
 
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
-def Integral_2(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwargs):
+def Integral_2(rs, **kwargs):
+    n_medium = kwargs['n_medium']
+    n_glass = kwargs['n_glass']
+    n_oil = kwargs['n_oil']
+    NA = kwargs['NA']
+
     capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
 
     def integrand(angle_medium):
@@ -288,18 +325,20 @@ def Integral_2(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwa
 
 
 
-@lru_cache_args(Integral_0, Integral_1, Integral_2, B, Camera.__init__, opd)
-def calculate_propagation(r_resolution=R_RESOLUTION, wavelen=WAVELEN, **kwargs):
+#@lru_cache_args(Integral_0, Integral_1, Integral_2, B, Camera.__init__, opd)
+def calculate_propagation(**kwargs):
     """
     Calculate the propagation from particle to camera.
     The mathematics is radial and the radial data is interpolated to project onto a grid
     Returns a matrix which converts an xyz polarized scatter field into an S and P component at the detector.
     [Es, Ep] = M [Ex, Ey, Ez]
     """
+    wavelen = kwargs['wavelen']
+    r_resolution = kwargs['r_resolution']
+
     camera = Camera(**kwargs)
     rs = np.linspace(0, np.max(camera.r), r_resolution)
 
-    I_0 = Integral_0(rs, **kwargs)  
     I_0 = interp1d(rs, Integral_0(rs, **kwargs))(camera.r)
     I_1 = interp1d(rs, Integral_1(rs, **kwargs))(camera.r)
     I_2 = interp1d(rs, Integral_2(rs, **kwargs))(camera.r)
@@ -315,18 +354,7 @@ def calculate_propagation(r_resolution=R_RESOLUTION, wavelen=WAVELEN, **kwargs):
     return -1j*k_0*np.stack([[e_sx, e_sy, e_sz], [e_px, e_py, e_pz]]).transpose((2, 3, 0, 1))
 
 
-def calculate_fields(
-        scatter_field=None,
-        wavelen=WAVELEN,
-        anisotropic=ANISOTROPIC,
-        azimuth=AZIMUTH,
-        inclination=INCLINATION,
-        beam_azimuth=BEAM_AZIMUTH,
-        beam_angle=BEAM_ANGLE,
-        polarization_azimuth=POLARIZATION_AZIMUTH,
-        polarized=POLARIZED,
-        **kwargs
-        ) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
+def calculate_fields(scatter_field=None,**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
     """
     Propagate and project the scatter field onto the detector
 
@@ -337,6 +365,17 @@ def calculate_fields(
     p : DesignParams
         A custom class containing experimental data
     """
+    wavelen = kwargs['wavelen']
+    anisotropic = kwargs['anisotropic']
+    azimuth = kwargs['azimuth']
+    inclination = kwargs['inclination']
+    beam_azimuth = kwargs['beam_azimuth']
+    beam_angle = kwargs['beam_angle']
+    polarization_azimuth = kwargs['polarization_azimuth']
+    polarized = kwargs['polarized']
+    n_medium = kwargs['n_medium']
+
+
     if scatter_field is None:
         scatter_field = calculate_scatter_field(**kwargs)
     
@@ -346,7 +385,7 @@ def calculate_fields(
     E_reference = r_gm
 
     # takes 2x3 matrix M takes polarization p and Mp gives E in p and s components.
-    detector_field_components = calculate_propagation(wavelen=wavelen, **kwargs)
+    detector_field_components = calculate_propagation(**kwargs)
 
     # Average over all angles if unpolarized
     if not polarized:
@@ -396,19 +435,17 @@ def calculate_fields(
 
     return detector_field, reference_field
     
-def calculate_intensities(**kwargs) -> NDArray[np.floating]:
+def calculate_intensities(scatter_field=None, **kwargs) -> NDArray[np.floating]:
     """
     Propagate and project the scatter field onto the detector
 
     Parameters
     ----------
-    signal : str or list of str
-        Specifies the desired output.
-        The string has to be one of 'interference', 'scattering', 'reference', 'signal', 'total'
+    polarized: bool
     """
-    polarized = kwargs.get('polarized', POLARIZED)
+    polarized = kwargs['polarized']
 
-    detector_field, reference_field = calculate_fields(**kwargs)
+    detector_field, reference_field = calculate_fields(scatter_field, **kwargs)
     
     interference_contrast = 2*np.sum(np.real((detector_field*np.conj(reference_field))), axis=-1)
     scatter_contrast = np.sum(np.abs(detector_field)**2, axis=-1)
@@ -424,16 +461,11 @@ def calculate_intensities(**kwargs) -> NDArray[np.floating]:
 
 
 
-def calculate_scatter_field_dipole(
-        n_glass=n_glass,
-        n_medium=n_medium,
-        n_oil=n_oil,
-        diameter=DIAMETER,
-        NA=NA,
-        wavelen=WAVELEN,
-        scat_mat=SCAT_MAT,
-        efficiency: float = 1.,
-        **kwargs):
+def calculate_scatter_field_dipole(**kwargs):
+    n_medium = kwargs['n_medium']
+    diameter = kwargs['diameter']
+    wavelen = kwargs['wavelen']
+    scat_mat = kwargs['scat_mat']
 
     a = diameter/2
     
@@ -450,7 +482,7 @@ def calculate_scatter_field_dipole(
     scatter_field = 1 + 0j
 
     # Magnitude and phase of scatter field
-    k = -2*np.pi*n_medium/wavelen
+    k = 2*np.pi*n_medium/wavelen
     e_scat = n_scat**2
     e_medium = n_medium**2
     polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium)
@@ -460,19 +492,17 @@ def calculate_scatter_field_dipole(
     scatter_cross_section = k**4/6/np.pi *polarizability**2
     
     # 1j delay due to max field at max movement -> minimum excitation
-    scatter_field *= np.sqrt(scatter_cross_section)*efficiency*1j
+    scatter_field *= np.sqrt(scatter_cross_section)*1j
     return scatter_field
 
-def calculate_scatter_field_mie(
-        n_medium=n_medium,
-        diameter=DIAMETER,
-        wavelen=WAVELEN,
-        scat_mat=SCAT_MAT,
-        efficiency: float = 1.,
-        **kwargs) -> np.complexfloating | NDArray[np.complexfloating]:
+def calculate_scatter_field_mie(**kwargs) -> np.complexfloating | NDArray[np.complexfloating]:
     """
     Supports array inputs
     """
+    n_medium = kwargs['n_medium']
+    diameter = kwargs['diameter']
+    wavelen = kwargs['wavelen']
+    scat_mat = kwargs['scat_mat']
     a = diameter/2
     # Check input
     if scat_mat not in {'gold', 'polystyrene'}:
@@ -506,7 +536,7 @@ def calculate_scatter_field_mie(
 
     # In the scattered, the real part is the amplitude and the angle gives the scatter phase.
     scatter_phase = np.angle(np.sqrt(F))
-    scatter_field = scatter_field*scatter_amplitude*np.exp(1j*scatter_phase)*efficiency
+    scatter_field = scatter_field*scatter_amplitude*np.exp(1j*scatter_phase)
     return scatter_field
 
 #@lru_cache_args(calculate_scatter_field_mie)
@@ -521,7 +551,7 @@ microns = {'z_p', 'defocus', 't_oil0', 't_glass0', 't_oil', 't_glass', 'roi_size
 nanometers = {'wavelen', 'diameter'}
 degrees = {'azimuth', 'inclination', 'beam_angle', 'beam_azimuth', 'polarization_azimuth'}
 
-def convert_units(kwargs: dict) -> dict:
+def create_params(**kwargs) -> dict:
     # Unit conversions
     for um in microns:
         if um in kwargs.keys():
@@ -535,15 +565,17 @@ def convert_units(kwargs: dict) -> dict:
         if deg in kwargs.keys():
             kwargs[deg] = np.radians(kwargs[deg])
     
-    return kwargs
+
+    return {**defaults, **kwargs}
 
 
 # User convenience functions for elegant numpy usage
 
 # Scattering only for performance
 def simulate_scattering(**kwargs):
-    kwargs = convert_units(kwargs)
-    return calculate_scatter_field(**kwargs)
+    """Simulate Mie/dipole scattering"""
+    params = create_params(**kwargs)
+    return calculate_scatter_field(**params)
 
 def vectorize_array(func, **kwargs):
     """Vectorization with array output"""
@@ -562,31 +594,34 @@ def vectorize_array(func, **kwargs):
     return np.moveaxis(stack,ret.ndim, 0)
 
 def simulate_center(**kwargs) -> NDArray[np.float64]:
-    kwargs = convert_units(kwargs)
+    """Simulate only the center pixel"""
+    params = create_params(**kwargs)
     # Assure wrong kwargs aren't passed along
     kwargs.pop('r_resolution', 0)
     kwargs.pop('roi_size', 0)
 
     # ROI size of one pixel
-    roi_size = kwargs.get('pxsize', PXSIZE)/kwargs.get('magnification', MAGNIFICATION)
+    roi_size = kwargs['pxsize']/kwargs['magnification']
 
-    return np.squeeze(vectorize_array(calculate_intensities, r_resolution=2, roi_size=roi_size, **kwargs))
+    return np.squeeze(vectorize_array(calculate_intensities, r_resolution=2, roi_size=roi_size, **params))
 
 
 def simulate_field(**kwargs) -> NDArray[np.complex128]:
-    kwargs = convert_units(kwargs)
+    """Simulate the field at the center pixel"""
+    params = create_params(**kwargs)
     # Assure wrong kwargs aren't passed along
     kwargs.pop('r_resolution', 0)
     kwargs.pop('roi_size', 0)
 
     # ROI size of one pixel
-    roi_size = kwargs.get('pxsize', PXSIZE)/kwargs.get('magnification', MAGNIFICATION)
-    return np.squeeze(vectorize_array(calculate_fields, r_resolution=2, roi_size=roi_size, **kwargs))
+    roi_size = kwargs['pxsize']/kwargs['magnification']
+    return np.squeeze(vectorize_array(calculate_fields, r_resolution=2, roi_size=roi_size, **params))
 
 def simulate_camera(**kwargs) -> NDArray[np.complex128]:
+    """Simulate an entire sensor"""
     # Unit conversions
-    kwargs = convert_units(kwargs)
-    return vectorize_array(calculate_intensities, **kwargs)
+    params = create_params(**kwargs)
+    return vectorize_array(calculate_intensities, **params)
 
 
 def polarization(vector: np.ndarray) -> np.ndarray:
