@@ -241,7 +241,7 @@ def B(n, angle_oil, rs, wavelen=wavelen, n_oil=n_oil, **kwargs):
 
 
 epsrel=1e-3
-def Integral_0(rs, scatter_field, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwargs):
+def Integral_0(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwargs):
     capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
 
     def integrand(angle_medium):
@@ -258,7 +258,7 @@ def Integral_0(rs, scatter_field, n_medium=n_medium, n_glass=n_glass, n_oil=n_oi
 
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
-def Integral_1(rs, scatter_field, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwargs):
+def Integral_1(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwargs):
     capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
 
     def integrand(angle_medium):
@@ -272,7 +272,7 @@ def Integral_1(rs, scatter_field, n_medium=n_medium, n_glass=n_glass, n_oil=n_oi
 
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
-def Integral_2(rs, scatter_field, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwargs):
+def Integral_2(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwargs):
     capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
 
     def integrand(angle_medium):
@@ -302,9 +302,10 @@ def calculate_propagation(r_resolution=r_resolution, wavelen=wavelen, **kwargs):
     camera = Camera(**kwargs)
     rs = np.linspace(0, np.max(camera.r), r_resolution)
 
-    I_0 = interp1d(rs, Integral_0(rs, np.ndarray(1), **kwargs), kind='cubic')(camera.r)
-    I_1 = interp1d(rs, Integral_1(rs, np.ndarray(1), **kwargs), kind='cubic')(camera.r)
-    I_2 = interp1d(rs, Integral_2(rs, np.ndarray(1), **kwargs), kind='cubic')(camera.r)
+    I_0 = Integral_0(rs, **kwargs)  
+    I_0 = interp1d(rs, Integral_0(rs, **kwargs))(camera.r)
+    I_1 = interp1d(rs, Integral_1(rs, **kwargs))(camera.r)
+    I_2 = interp1d(rs, Integral_2(rs, **kwargs))(camera.r)
     
     e_sx = I_0 + I_2*np.cos(2*camera.phi)
     e_sy = I_2*np.sin(2*camera.phi)
@@ -566,7 +567,7 @@ def simulate_center(
     kwargs = convert_units(kwargs)
 
     result = _simulate_center_vec(signal=signal, **kwargs)
-    return np.squeeze(np.stack(result)).astype(np.float64)
+    return np.squeeze(np.stack(result)).astype(np.complex128)
 
 def _simulate_camera(**kwargs):
     scatter_field = calculate_scatter_field(**kwargs)
@@ -582,7 +583,7 @@ def simulate_camera(
     kwargs = convert_units(kwargs)
     
     result = _simulate_camera_vec(signal=signal, **kwargs)
-    return np.squeeze(np.stack(result)).astype(np.float64)
+    return np.squeeze(np.stack(result)).astype(np.complex128)
 
 
 def polarization(vector: np.ndarray) -> np.ndarray:
