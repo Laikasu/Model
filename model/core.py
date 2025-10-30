@@ -96,52 +96,49 @@ n_oil = 1.518
 n_glyc = 1.461
 
 # default design parameters
-aberrations = False
-n_oil: float = n_oil
-n_glass: float = n_glass
+ABERRATIONS = False
 n_medium: float = n_water
 
 t_oil: float = 100e-6 # micron
 t_glass: float = 170e-6 # micron
 
-diameter: float = 30e-9 # nm
-z_p: float = 0 # micron
-defocus: float = 0 # um
-wavelen: float = 532e-9 # nm
+DIAMETER: float = 30e-9 # nm
+Z_P: float = 0 # micron
+DEFOCUS: float = 0 # um
+WAVELEN: float = 532e-9 # nm
 NA: float = 1.4
 
 
-multipolar: bool = True
+MULTIPOLAR: bool = True
 
 
-roi_size: float = 2e-6 # micron
-pxsize: float = 3.45e-6 # micron
-magnification: int = 60
+ROI_SIZE: float = 2e-6 # micron
+PXSIZE: float = 3.45e-6 # micron
+MAGNIFICATION: int = 60
 
-scat_mat: str = "gold"
+SCAT_MAT: str = "gold"
 
-x0: float = 0 #micron
-y0: float = 0 #micron
-gold_model: str = 'experiment'
-r_resolution: int = 50
+X0: float = 0 #micron
+Y0: float = 0 #micron
+R_RESOLUTION: int = 50
 
 # Angles
 # Particle polarization direction
-anisotropic = False
-azimuth = 0 # degrees
-inclination = 0 # degrees
+ANISOTROPIC = False
+AZIMUTH = 0 # degrees
+INCLINATION = 0 # degrees
 
 # Excitation beam
-polarized: bool = False
-polarization_azimuth = 0 # degrees
-beam_angle = 0 # degrees
-beam_azimuth = 0 # degrees
+POLARIZED: bool = False
+POLARIZATION_AZIMUTH = 0 # degrees
+BEAM_ANGLE = 0 # degrees
+BEAM_AZIMUTH = 0 # degrees
 
     
 
 class Camera():
     """Helper class to handle coordinate conversions"""
-    def __init__(self, x0=x0, y0=y0, roi_size=roi_size, pxsize=pxsize, magnification=magnification,**kwargs):
+    def __init__(self, x0=X0, y0=Y0, roi_size=ROI_SIZE, pxsize=PXSIZE, magnification=MAGNIFICATION,**kwargs):
         self.roi_size = roi_size
         self.pxsize = pxsize
         self.magnification = magnification
@@ -155,7 +152,7 @@ class Camera():
         self.phi = np.arctan2(self.y-y0, self.x-x0)
 
 
-def opd(angle_oil, z_p=z_p, defocus=defocus, aberrations=aberrations,
+def opd(angle_oil, z_p=Z_P, defocus=DEFOCUS, aberrations=ABERRATIONS,
         n_oil=n_oil, n_oil0=n_oil, n_glass=n_glass, n_glass0=n_glass, n_medium=n_medium,
         t_glass=t_glass, t_glass0=t_glass, t_oil0=t_oil, **kwargs):
     """
@@ -194,7 +191,7 @@ def opd(angle_oil, z_p=z_p, defocus=defocus, aberrations=aberrations,
         
         return n_eff_oil*Dt_oil + excitation_opd
 
-def opd_ref(z_p=z_p, defocus=defocus, aberrations=aberrations,
+def opd_ref(z_p=Z_P, defocus=DEFOCUS, aberrations=ABERRATIONS,
         n_oil=n_oil, n_oil0=n_oil, n_glass=n_glass, n_glass0=n_glass, n_medium=n_medium,
         t_glass=t_glass, t_glass0=t_glass, t_oil0=t_oil, **kwargs):
     """
@@ -234,7 +231,7 @@ def t_s(n1, angle1, n2, angle2):
     return 2*n1*np.cos(angle1)/(n1*np.cos(angle1) + n2*np.cos(angle2))
 
 
-def B(n, angle_oil, rs, wavelen=wavelen, n_oil=n_oil, **kwargs):
+def B(n, angle_oil, rs, wavelen=WAVELEN, n_oil=n_oil, **kwargs):
 
     k_0 = -2*np.pi/wavelen
     return np.sqrt(np.cos(angle_oil))*np.sin(angle_oil)*jv(n, k_0*rs*n_oil*np.sin(angle_oil))*np.exp(1j*k_0*opd(angle_oil, **kwargs))
@@ -292,7 +289,7 @@ def Integral_2(rs, n_medium=n_medium, n_glass=n_glass, n_oil=n_oil, NA=NA, **kwa
 
 
 @lru_cache_args(Integral_0, Integral_1, Integral_2, B, Camera.__init__, opd)
-def calculate_propagation(r_resolution=r_resolution, wavelen=wavelen, **kwargs):
+def calculate_propagation(r_resolution=R_RESOLUTION, wavelen=WAVELEN, **kwargs):
     """
     Calculate the propagation from particle to camera.
     The mathematics is radial and the radial data is interpolated to project onto a grid
@@ -317,19 +314,19 @@ def calculate_propagation(r_resolution=r_resolution, wavelen=wavelen, **kwargs):
     k_0 = -2*np.pi/wavelen
     return -1j*k_0*np.stack([[e_sx, e_sy, e_sz], [e_px, e_py, e_pz]]).transpose((2, 3, 0, 1))
 
-def calculate_intensities(
-        scatter_field,
-        signal: str | Iterable[str] ='signal',
-        wavelen=wavelen,
-        anisotropic=anisotropic,
-        azimuth=azimuth,
-        inclination=inclination,
-        beam_azimuth=beam_azimuth,
-        beam_angle=beam_angle,
-        polarization_azimuth=polarization_azimuth,
-        polarized=polarized,
+
+def calculate_fields(
+        scatter_field=None,
+        wavelen=WAVELEN,
+        anisotropic=ANISOTROPIC,
+        azimuth=AZIMUTH,
+        inclination=INCLINATION,
+        beam_azimuth=BEAM_AZIMUTH,
+        beam_angle=BEAM_ANGLE,
+        polarization_azimuth=POLARIZATION_AZIMUTH,
+        polarized=POLARIZED,
         **kwargs
-        ) -> NDArray[np.complex128]:
+        ) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
     """
     Propagate and project the scatter field onto the detector
 
@@ -339,16 +336,9 @@ def calculate_intensities(
         A polarized field to propagate and project
     p : DesignParams
         A custom class containing experimental data
-    signal : str or list of str
-        Specifies the desired output.
-        The string has to be one of 'interference', 'scattering', 'reference', 'signal', 'total',
-        'reference_field', 'detector_field'
     """
-    # Verify input
-    signal = [signal] if isinstance(signal, str) else signal
-    for sig in signal:
-        if sig not in {'interference', 'scattering', 'reference', 'signal', 'total', 'reference_field', 'detector_field'}:
-            raise ValueError(f"Invalid signal: {sig}. Must be one of 'interference', 'scattering', 'reference', 'signal', 'total', 'reference_field', 'detector_field'.")
+    if scatter_field is None:
+        scatter_field = calculate_scatter_field(**kwargs)
     
 
     # Relative signal strength change due to layer boundaries
@@ -401,28 +391,36 @@ def calculate_intensities(
     slant_opd = slant_opd.reshape(slant_opd.shape + (1,) * reference_field.ndim)
 
     reference_field = reference_field*np.exp(1j*k*slant_opd)
+    detector_field /= np.exp(1j*k*opd_ref(**kwargs))
     # correct detector field for phase common with reference
 
-    detector_field /= np.exp(1j*k*opd_ref(**kwargs))
+    return detector_field, reference_field
     
-    interference_intensity = 2*np.sum(np.real((detector_field*np.conj(reference_field))), axis=-1)
-    scatter_intensity = np.sum(np.abs(detector_field)**2, axis=-1)
+def calculate_intensities(**kwargs) -> NDArray[np.floating]:
+    """
+    Propagate and project the scatter field onto the detector
+
+    Parameters
+    ----------
+    signal : str or list of str
+        Specifies the desired output.
+        The string has to be one of 'interference', 'scattering', 'reference', 'signal', 'total'
+    """
+    polarized = kwargs.get('polarized', POLARIZED)
+
+    detector_field, reference_field = calculate_fields(**kwargs)
+    
+    interference_contrast = 2*np.sum(np.real((detector_field*np.conj(reference_field))), axis=-1)
+    scatter_contrast = np.sum(np.abs(detector_field)**2, axis=-1)
 
     
 
     # Average over all polarization angles if unpolarized
     if not polarized:
-        interference_intensity = np.mean(interference_intensity, axis=-1)
-        scatter_intensity = np.mean(scatter_intensity, axis=-1)
+        interference_contrast = np.mean(interference_contrast, axis=-1)
+        scatter_contrast = np.mean(scatter_contrast, axis=-1)
     
-
-    returns = {'interference':interference_intensity,
-        'scattering':scatter_intensity,
-        'signal':scatter_intensity+interference_intensity,
-        'reference_field':reference_field,
-        'detector_field':detector_field}
-    
-    return np.squeeze(np.stack([np.squeeze(returns[sig]) for sig in signal]))
+    return np.stack([interference_contrast, scatter_contrast])
 
 
 
@@ -430,10 +428,10 @@ def calculate_scatter_field_dipole(
         n_glass=n_glass,
         n_medium=n_medium,
         n_oil=n_oil,
-        diameter=diameter,
+        diameter=DIAMETER,
         NA=NA,
-        wavelen=wavelen,
-        scat_mat=scat_mat,
+        wavelen=WAVELEN,
+        scat_mat=SCAT_MAT,
         efficiency: float = 1.,
         **kwargs):
 
@@ -466,16 +464,15 @@ def calculate_scatter_field_dipole(
     return scatter_field
 
 def calculate_scatter_field_mie(
-        n_glass=n_glass,
         n_medium=n_medium,
-        n_oil=n_oil,
-        diameter=diameter,
-        NA=NA,
-        wavelen=wavelen,
-        scat_mat=scat_mat,
+        diameter=DIAMETER,
+        wavelen=WAVELEN,
+        scat_mat=SCAT_MAT,
         efficiency: float = 1.,
         **kwargs) -> np.complexfloating | NDArray[np.complexfloating]:
-    
+    """
+    Supports array inputs
+    """
     a = diameter/2
     # Check input
     if scat_mat not in {'gold', 'polystyrene'}:
@@ -499,9 +496,9 @@ def calculate_scatter_field_mie(
     mu = np.cos(angle)
 
     # S1 and S2 give the scatter amplitudes perpendicular (S2) and parallel (S1) to the incoming light
-    S1, S2 = mie.S1_S2(m, x_mie, mu,norm='wiscombe')
+    S1, S2 = np.vectorize(mie.S1_S2)(m, x_mie, mu,norm='wiscombe')
 
-    qext, qsca, qback, g = mie.efficiencies_mx(m, x_mie)
+    qext, qsca, qback, g = np.vectorize(mie.efficiencies_mx)(m, x_mie)
     F = (S1**2+S2**2)/2
     
     scatter_cross_section = qback*np.pi*a**2
@@ -512,32 +509,12 @@ def calculate_scatter_field_mie(
     scatter_field = scatter_field*scatter_amplitude*np.exp(1j*scatter_phase)*efficiency
     return scatter_field
 
-@lru_cache_args(calculate_scatter_field_mie)
+#@lru_cache_args(calculate_scatter_field_mie)
 def calculate_scatter_field(multipolar=True, **kwargs):
     if multipolar:
         return calculate_scatter_field_mie(**kwargs)
     
     return calculate_scatter_field_dipole(**kwargs)
-
-
-# User convenience functions for elegant numpy usage
-
-# Scattering only for performance
-def _simulate_scattering(**kwargs):
-    # Unit conversions
-    kwargs = convert_units(kwargs)
-    return calculate_scatter_field(**kwargs)
-
-simulate_scattering = np.vectorize(_simulate_scattering)
-
-
-# Scattering + Propagation + Projection at the center of the camera
-def _simulate_center(r_resolution=2, **kwargs):
-    scatter_field = calculate_scatter_field(**kwargs)
-    # 1 pixel camera
-    return calculate_intensities(scatter_field, r_resolution=2, roi_size=pxsize/magnification, **kwargs)
-
-_simulate_center_vec = np.vectorize(_simulate_center, excluded={'signal'},otypes=[np.ndarray])
 
 
 microns = {'z_p', 'defocus', 't_oil0', 't_glass0', 't_oil', 't_glass', 'roi_size', 'pxsize', 'x0', 'y0'}
@@ -560,40 +537,62 @@ def convert_units(kwargs: dict) -> dict:
     
     return kwargs
 
-def simulate_center(
-        signal: Sequence[str] | Literal['interference','scattering','signal','reference_field','detector_field'] = 'signal',
-        **kwargs):
-    # Unit conversions
+
+# User convenience functions for elegant numpy usage
+
+# Scattering only for performance
+def simulate_scattering(**kwargs):
     kwargs = convert_units(kwargs)
+    return calculate_scatter_field(**kwargs)
 
-    result = _simulate_center_vec(signal=signal, **kwargs)
-    return np.squeeze(np.stack(result)).astype(np.complex128)
-
-def _simulate_camera(**kwargs):
-    scatter_field = calculate_scatter_field(**kwargs)
-    return calculate_intensities(scatter_field, **kwargs)
-
-_simulate_camera_vec = np.vectorize(_simulate_camera, excluded={'signal'},otypes=[np.ndarray])
-
-
-def simulate_camera(
-        signal:  Sequence[str] | Literal['interference','scattering','signal','reference_field','detector_field'] = 'signal',
-        **kwargs):
-    # Unit conversions
-    kwargs = convert_units(kwargs)
+def vectorize_array(func, **kwargs):
+    """Vectorization with array output"""
+    # Vectorize loses type
+    ret = np.vectorize(func, otypes=[np.ndarray])(**kwargs)
     
-    result = _simulate_camera_vec(signal=signal, **kwargs)
-    return np.squeeze(np.stack(result)).astype(np.complex128)
+    stack = np.stack(ret)
+    if stack.dtype == object:
+        stack = np.array(stack.tolist())
+    
+    # Force the type
+    #stack = np.array(stack.tolist(), dtype=dtype)
+    # 1D
+    if ret.shape == stack.shape:
+        return stack
+    return np.moveaxis(stack,ret.ndim, 0)
+
+def simulate_center(**kwargs) -> NDArray[np.float64]:
+    kwargs = convert_units(kwargs)
+    # Assure wrong kwargs aren't passed along
+    kwargs.pop('r_resolution', 0)
+    kwargs.pop('roi_size', 0)
+
+    # ROI size of one pixel
+    roi_size = kwargs.get('pxsize', PXSIZE)/kwargs.get('magnification', MAGNIFICATION)
+
+    return np.squeeze(vectorize_array(calculate_intensities, r_resolution=2, roi_size=roi_size, **kwargs))
+
+
+def simulate_field(**kwargs) -> NDArray[np.complex128]:
+    kwargs = convert_units(kwargs)
+    # Assure wrong kwargs aren't passed along
+    kwargs.pop('r_resolution', 0)
+    kwargs.pop('roi_size', 0)
+
+    # ROI size of one pixel
+    roi_size = kwargs.get('pxsize', PXSIZE)/kwargs.get('magnification', MAGNIFICATION)
+    return np.squeeze(vectorize_array(calculate_fields, r_resolution=2, roi_size=roi_size, **kwargs))
+
+def simulate_camera(**kwargs) -> NDArray[np.complex128]:
+    # Unit conversions
+    kwargs = convert_units(kwargs)
+    return vectorize_array(calculate_intensities, **kwargs)
 
 
 def polarization(vector: np.ndarray) -> np.ndarray:
-    v = vector.real
+    v = np.abs(vector)
     return v/np.linalg.norm(v,axis=-1,keepdims=True)*np.sign(v[...,0:1])
 
 def magnitude(vector: np.ndarray) -> np.complex128:
     # dot product
     return np.einsum('...i,...i', polarization(vector), np.conj(vector))
-
-if __name__ == "__main__":
-    simulate_camera(multipolar=True, scat_mat='polystyrene')
-    simulate_camera(multipolar=False, scat_mat='polystyrene')
