@@ -596,26 +596,23 @@ def vectorize_array(func, **kwargs):
 def simulate_center(**kwargs) -> NDArray[np.float64]:
     """Simulate only the center pixel"""
     params = create_params(**kwargs)
-    # Assure wrong kwargs aren't passed along
-    kwargs.pop('r_resolution', 0)
-    kwargs.pop('roi_size', 0)
+    # Single pixel
+    params['r_resolution'] = 2
+    roi_size = params['pxsize']/params['magnification']
+    params['roi_size'] = roi_size
 
-    # ROI size of one pixel
-    roi_size = kwargs['pxsize']/kwargs['magnification']
-
-    return np.squeeze(vectorize_array(calculate_intensities, r_resolution=2, roi_size=roi_size, **params))
+    return np.squeeze(vectorize_array(calculate_intensities, **params))
 
 
 def simulate_field(**kwargs) -> NDArray[np.complex128]:
     """Simulate the field at the center pixel"""
     params = create_params(**kwargs)
-    # Assure wrong kwargs aren't passed along
-    kwargs.pop('r_resolution', 0)
-    kwargs.pop('roi_size', 0)
+    # Single pixel
+    params['r_resolution'] = 2
+    roi_size = params['pxsize']/params['magnification']
+    params['roi_size'] = roi_size
 
-    # ROI size of one pixel
-    roi_size = kwargs['pxsize']/kwargs['magnification']
-    return np.squeeze(vectorize_array(calculate_fields, r_resolution=2, roi_size=roi_size, **params))
+    return np.squeeze(vectorize_array(calculate_fields, **params))
 
 def simulate_camera(**kwargs) -> NDArray[np.complex128]:
     """Simulate an entire sensor"""
