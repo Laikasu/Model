@@ -123,12 +123,12 @@ defaults = {
     "efficiency": 1.,   # Determined through experiment
     # Angles / Polarization
     "anisotropic": False,
-    "azimuth": 0,           # degrees
-    "inclination": 0,       # degrees
+    "azimuth": 0,           # radians
+    "inclination": 0,       # radians
     "polarized": False,
-    "polarization_azimuth": 0,  # degrees
-    "beam_angle": 0,             # degrees
-    "beam_azimuth": 0            # degrees
+    "polarization_azimuth": 0,  # radians
+    "beam_angle": 0,             # radians
+    "beam_azimuth": 0            # radians
 }
 
 
@@ -389,9 +389,9 @@ def calculate_fields(scatter_field=None,**kwargs) -> tuple[NDArray[np.complex128
     # takes 2x3 matrix M takes polarization p and Mp gives E in p and s components.
     detector_field_components = calculate_propagation(**kwargs)
 
-    # Average over all angles if unpolarized
+    # Average over angles if unpolarized
     if not polarized:
-        polarization_azimuth = np.linspace(0, 180, 10)
+        polarization_azimuth = np.linspace(0, 2*np.pi, 20)
 
     xyz_polarization = np.array([np.cos(polarization_azimuth),
         np.sin(polarization_azimuth),
@@ -486,18 +486,18 @@ def calculate_scatter_field_dipole(**kwargs):
 
     # Magnitude and phase of scatter field
     k = 2*np.pi*n_medium/wavelen
+    x = k*a
     e_scat = n_scat**2
     e_medium = n_medium**2
     polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium)
 
     scatter_field = k**2*polarizability/2/np.sqrt(np.pi)
 
-    # if (x_mie > 0.1):
-    #     print("Exceeded bounds of Rayleigh approximation")
-    # Backscattering, non-averaged for orientation
-    # scatter_cross_section = k**4/4/np.pi *polarizability**2
+    if (x > 0.1):
+        print("Exceeded bounds of Rayleigh approximation")
     
-    # 1j delay is not captured in polarizability
+    # 1j delay is not captured in polarizability. The physical origin is the scattered wave being spherical and the incoming being planar.
+    # For the radius of curvature to match it needs an i phase change
     return scatter_field*1j
 
 def calculate_scatter_field_mie(**kwargs) -> np.complexfloating | NDArray[np.complexfloating]:
