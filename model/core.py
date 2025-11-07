@@ -120,6 +120,7 @@ defaults = {
     "x0": 0,               # micron
     "y0": 0,               # micron
     "r_resolution": 50,
+    "efficiency": 1.,   # Determined through experiment
     # Angles / Polarization
     "anisotropic": False,
     "azimuth": 0,           # degrees
@@ -374,6 +375,7 @@ def calculate_fields(scatter_field=None,**kwargs) -> tuple[NDArray[np.complex128
     polarization_azimuth = kwargs['polarization_azimuth']
     polarized = kwargs['polarized']
     n_medium = kwargs['n_medium']
+    efficiency = kwargs['efficiency']
 
 
     if scatter_field is None:
@@ -420,7 +422,9 @@ def calculate_fields(scatter_field=None,**kwargs) -> tuple[NDArray[np.complex128
             polarization = np.expand_dims(np.dot(polarizability_direction, xyz_polarization), 1)*polarizability_direction
             detector_field = np.einsum('ijab,kb->ijka', detector_field_components, polarization)
     
-    detector_field *= scatter_field
+
+    # Apply scatter field and collection efficiency modification
+    detector_field *= scatter_field*efficiency
     
     # effect of inclination on opd
     k = -2*np.pi/wavelen
@@ -456,6 +460,7 @@ def calculate_intensities(scatter_field=None, **kwargs) -> NDArray[np.floating]:
     if not polarized:
         interference_contrast = np.mean(interference_contrast, axis=-1)
         scatter_contrast = np.mean(scatter_contrast, axis=-1)
+
     
     return np.stack([interference_contrast, scatter_contrast])
 
@@ -479,21 +484,21 @@ def calculate_scatter_field_dipole(**kwargs):
     else:
         n_scat = n_ps
 
-    scatter_field = 1 + 0j
-
     # Magnitude and phase of scatter field
     k = 2*np.pi*n_medium/wavelen
     e_scat = n_scat**2
     e_medium = n_medium**2
     polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium)
 
+    scatter_field = k**2*polarizability/2/np.sqrt(np.pi)
+
     # if (x_mie > 0.1):
     #     print("Exceeded bounds of Rayleigh approximation")
-    scatter_cross_section = k**4/6/np.pi *polarizability**2
+    # Backscattering, non-averaged for orientation
+    # scatter_cross_section = k**4/4/np.pi *polarizability**2
     
-    # 1j delay due to max field at max movement -> minimum excitation
-    scatter_field *= np.sqrt(scatter_cross_section)*1j
-    return scatter_field
+    # 1j delay is not captured in polarizability
+    return scatter_field*1j
 
 def calculate_scatter_field_mie(**kwargs) -> np.complexfloating | NDArray[np.complexfloating]:
     """
@@ -503,6 +508,8 @@ def calculate_scatter_field_mie(**kwargs) -> np.complexfloating | NDArray[np.com
     diameter = kwargs['diameter']
     wavelen = kwargs['wavelen']
     scat_mat = kwargs['scat_mat']
+    polarization_angle = kwargs['polarization_azimuth']
+    azimuth = kwargs['azimuth']
     a = diameter/2
     # Check input
     if scat_mat not in {'gold', 'polystyrene'}:
@@ -513,30 +520,46 @@ def calculate_scatter_field_mie(**kwargs) -> np.complexfloating | NDArray[np.com
     else:
         n_scat = n_ps
 
-    scatter_field = 1 + 0j
-
     # Magnitude and phase of scatter field
     # capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
     # collection_efficiency = capture_angle_medium/np.pi
     k = 2*np.pi*n_medium/wavelen
-    x_mie = 2*np.pi*a*n_medium / wavelen
+    x_mie = k*a
     m = n_scat/n_medium
 
-    angle = np.pi
-    mu = np.cos(angle)
+    # Benchmark
 
-    # S1 and S2 give the scatter amplitudes perpendicular (S2) and parallel (S1) to the incoming light
-    S1, S2 = np.vectorize(mie.S1_S2)(m, x_mie, mu,norm='wiscombe')
+    # # S1 and S2 give the scatter amplitudes parallel (S1) and perpendicular (S2) to the scattering plane (k_in and k_out)
+    # # for backscattering S1 = -S2, I take S1
+    # S1_0, S2_0 = mie.S1_S2(m, x_mie, 1, norm='wiscombe')
+    # S1_pi, S2_pi = mie.S1_S2(m, x_mie, -1, norm='wiscombe')
 
-    qext, qsca, qback, g = np.vectorize(mie.efficiencies_mx)(m, x_mie)
-    F = (S1**2+S2**2)/2
+    # backscatter_field = S1_pi/k
+
+    # q_ext = 4*np.real(S1_0)/x_mie**2
+
+    # def integrand(angle):
+    #     mu = np.cos(angle)
+    #     S1, S2 = mie.S1_S2(m, x_mie, mu, norm='wiscombe')
+    #     F = (np.abs(S1)**2+np.abs(S2)**2)/2
+    #     return F*np.sin(angle)
     
-    scatter_cross_section = qback*np.pi*a**2
-    scatter_amplitude = np.sqrt(scatter_cross_section)
+    # q_sca = 2*quad(integrand, 0, np.pi)[0]/x_mie**2
 
-    # In the scattered, the real part is the amplitude and the angle gives the scatter phase.
-    scatter_phase = np.angle(np.sqrt(F))
-    scatter_field = scatter_field*scatter_amplitude*np.exp(1j*scatter_phase)
+    # q_back = 4*np.abs(backscatter_field)**2/a**2
+
+
+    # print(q_ext, q_sca, q_back)
+    # # Other function for benchmark
+    # qext, qsca, qback, g = np.vectorize(mie.efficiencies_mx)(m, x_mie)
+    # print(qext, qsca, qback)
+
+
+    S1_pi, S2_pi = mie.S1_S2(m, x_mie, -1, norm='wiscombe')
+    scatter_field = 2*np.sqrt(np.pi)*S1_pi/k
+
+    # In the scattered field, the absolute is the amplitude and the angle gives the scatter phase.
+    # The square of the scatter field gives the backscatter cross section.
     return scatter_field
 
 #@lru_cache_args(calculate_scatter_field_mie)
