@@ -277,9 +277,10 @@ def Integral_0(rs, **kwargs):
         t_s_1 = t_s(n_medium, angle_medium, n_glass, angle_glass)
         t_s_2 = t_s(n_glass, angle_glass, n_oil, angle_oil)
         n_eff_medium = np.sqrt(n_medium**2 - n_oil**2*np.sin(angle_oil)**2)
+        E_s, E_p = calculate_scatter_field(**kwargs)(angle_medium)
 
         return (B(0, angle_oil, rs, **kwargs)*
-            (t_s_1*t_s_2 + t_p_1*t_p_2/n_medium*n_eff_medium))
+            (E_s*t_s_1*t_s_2 + E_p*t_p_1*t_p_2 * n_eff_medium/n_medium))
 
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
@@ -296,9 +297,10 @@ def Integral_1(rs, **kwargs):
         angle_oil = snells_law(n_glass, angle_glass, n_oil)
         t_p_1 = t_p(n_medium, angle_medium, n_glass, angle_glass)
         t_p_2 = t_p(n_glass, angle_glass, n_oil, angle_oil)
+        E_s, E_p = calculate_scatter_field(**kwargs)(angle_medium)
 
         return (B(1, angle_oil, rs, **kwargs)*
-            t_p_1*t_p_2 * n_oil/n_glass * np.sin(angle_oil))
+            E_p*t_p_1*t_p_2 * n_oil/n_glass * np.sin(angle_oil))
 
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
@@ -318,9 +320,10 @@ def Integral_2(rs, **kwargs):
         t_s_1 = t_s(n_medium, angle_medium, n_glass, angle_glass)
         t_s_2 = t_s(n_glass, angle_glass, n_oil, angle_oil)
         n_eff_medium = np.sqrt(n_medium**2 - n_oil**2*np.sin(angle_oil)**2)
+        E_s, E_p = calculate_scatter_field(**kwargs)(angle_medium)
 
         return (B(2, angle_oil, rs, **kwargs)*
-            (t_s_1*t_s_2 - t_p_1*t_p_2/n_medium*n_eff_medium))
+            (E_s*t_s_1*t_s_2 - E_p*t_p_1*t_p_2 * n_eff_medium/n_medium))
 
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
