@@ -496,7 +496,8 @@ def calculate_scatter_field_dipole(**kwargs):
     def scattering_amplitude(angle):
         # [1 1]/sqrt(2) gives unpolarized average, [1 cos(angle)] gives contributions of thoses components
         polarization_components = np.squeeze([1, np.cos(angle)])/np.sqrt(2)
-        return k**2*polarizability/4/np.pi*polarization_components*1j
+        polarization_factor = np.sqrt(np.sum(polarization_components**2, axis=0))
+        return k**2*polarizability/4/np.pi*polarization_factor*1j
     # if (x > 0.1):
     #     print("Exceeded bounds of Rayleigh approximation")
     
@@ -571,7 +572,8 @@ def calculate_scatter_field_mie(**kwargs):
         mu = np.cos(angle)
         S1, S2 = mie.S1_S2(m, x_mie, mu, norm='wiscombe')
         S = np.squeeze([S1, S2])/np.sqrt(2) #unpolarized average
-        return S/k
+        amplitude = np.sqrt(np.sum(S**2, axis=0))
+        return amplitude/k
 
     # In the scattered field, the absolute is the amplitude and the angle gives the scatter phase.
     # The square of the scatter field gives the backscatter cross section.
