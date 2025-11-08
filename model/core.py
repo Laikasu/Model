@@ -344,18 +344,20 @@ def calculate_propagation(**kwargs):
     I_1 = interp1d(rs, Integral_1(rs, **kwargs))(camera.r)
     I_2 = interp1d(rs, Integral_2(rs, **kwargs))(camera.r)
     
-    e_sx = I_0 + I_2*np.cos(2*camera.phi)
-    e_sy = I_2*np.sin(2*camera.phi)
-    e_sz = -2j*I_1*np.cos(camera.phi)
-    e_px = I_2*np.sin(2*camera.phi)
-    e_py = I_0 - I_2*np.cos(2*camera.phi)
-    e_pz = -2j*I_1*np.sin(camera.phi)
+    # Components for x polarization
+    e_xx = I_0 + I_2*np.cos(2*camera.phi)
+    e_yx = I_2*np.sin(2*camera.phi)
+    e_zx = -2j*I_1*np.cos(camera.phi)
+    # Components for y polarization
+    e_xy = I_2*np.sin(2*camera.phi)
+    e_yy = I_0 - I_2*np.cos(2*camera.phi)
+    e_zy = -2j*I_1*np.sin(camera.phi)
 
     k_0 = -2*np.pi/wavelen
-    return -1j*k_0*np.stack([[e_sx, e_sy, e_sz], [e_px, e_py, e_pz]]).transpose((2, 3, 0, 1))
+    return -1j*k_0*np.stack([[e_xx, e_yx, e_zx], [e_xy, e_yy, e_zy]]).transpose((2, 3, 0, 1))
 
 
-def calculate_fields(scatter_field=None,**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
+def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
     """
     Propagate and project the scatter field onto the detector
 
@@ -376,10 +378,6 @@ def calculate_fields(scatter_field=None,**kwargs) -> tuple[NDArray[np.complex128
     polarized = kwargs['polarized']
     n_medium = kwargs['n_medium']
     efficiency = kwargs['efficiency']
-
-
-    if scatter_field is None:
-        scatter_field = calculate_scatter_field(**kwargs)
     
 
     # Relative signal strength change due to layer boundaries
@@ -423,8 +421,8 @@ def calculate_fields(scatter_field=None,**kwargs) -> tuple[NDArray[np.complex128
             detector_field = np.einsum('ijab,kb->ijka', detector_field_components, polarization)
     
 
-    # Apply scatter field and collection efficiency modification
-    detector_field *= scatter_field*efficiency
+    # Apply collection efficiency modification
+    detector_field *= efficiency
     
     # effect of inclination on opd
     k = -2*np.pi/wavelen
@@ -439,7 +437,7 @@ def calculate_fields(scatter_field=None,**kwargs) -> tuple[NDArray[np.complex128
 
     return detector_field, reference_field
     
-def calculate_intensities(scatter_field=None, **kwargs) -> NDArray[np.floating]:
+def calculate_intensities(**kwargs) -> NDArray[np.floating]:
     """
     Propagate and project the scatter field onto the detector
 
@@ -449,7 +447,7 @@ def calculate_intensities(scatter_field=None, **kwargs) -> NDArray[np.floating]:
     """
     polarized = kwargs['polarized']
 
-    detector_field, reference_field = calculate_fields(scatter_field, **kwargs)
+    detector_field, reference_field = calculate_fields(**kwargs)
     
     interference_contrast = 2*np.sum(np.real((detector_field*np.conj(reference_field))), axis=-1)
     scatter_contrast = np.sum(np.abs(detector_field)**2, axis=-1)
@@ -486,21 +484,25 @@ def calculate_scatter_field_dipole(**kwargs):
 
     # Magnitude and phase of scatter field
     k = 2*np.pi*n_medium/wavelen
-    x = k*a
     e_scat = n_scat**2
     e_medium = n_medium**2
     polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium)
 
-    scatter_field = k**2*polarizability/2/np.sqrt(np.pi)
+    #scatter_field = k**2*polarizability/2/np.sqrt(np.pi)
 
-    if (x > 0.1):
-        print("Exceeded bounds of Rayleigh approximation")
+    def scattering_amplitude(angle):
+        # [1 1]/sqrt(2) gives unpolarized average, [1 cos(angle)] gives contributions of thoses components
+        polarization_components = np.squeeze([1, np.cos(angle)])/np.sqrt(2)
+        polarization_factor = np.sqrt(np.sum(polarization_components**2, axis=0))
+        return k**2*polarizability/4/np.pi*polarization_factor*1j
+    # if (x > 0.1):
+    #     print("Exceeded bounds of Rayleigh approximation")
     
     # 1j delay is not captured in polarizability. The physical origin is the scattered wave being spherical and the incoming being planar.
     # For the radius of curvature to match it needs an i phase change
-    return scatter_field*1j
+    return scattering_amplitude
 
-def calculate_scatter_field_mie(**kwargs) -> np.complexfloating | NDArray[np.complexfloating]:
+def calculate_scatter_field_mie(**kwargs):
     """
     Supports array inputs
     """
@@ -538,11 +540,18 @@ def calculate_scatter_field_mie(**kwargs) -> np.complexfloating | NDArray[np.com
 
     # q_ext = 4*np.real(S1_0)/x_mie**2
 
+    # # def integrand(angle):
+    # #     mu = np.cos(angle)
+    # #     S1, S2 = mie.S1_S2(m, x_mie, mu, norm='wiscombe')
+    # #     F = (np.abs(S1)**2+np.abs(S2)**2)/2
+    # #     return F*np.sin(angle)
+    
     # def integrand(angle):
     #     mu = np.cos(angle)
     #     S1, S2 = mie.S1_S2(m, x_mie, mu, norm='wiscombe')
-    #     F = (np.abs(S1)**2+np.abs(S2)**2)/2
-    #     return F*np.sin(angle)
+    #     S = np.squeeze([S1, S2])/np.sqrt(2)
+    #     E = np.sqrt(np.sum(S**2))
+    #     return np.abs(E)**2*np.sin(angle)
     
     # q_sca = 2*quad(integrand, 0, np.pi)[0]/x_mie**2
 
@@ -553,14 +562,19 @@ def calculate_scatter_field_mie(**kwargs) -> np.complexfloating | NDArray[np.com
     # # Other function for benchmark
     # qext, qsca, qback, g = np.vectorize(mie.efficiencies_mx)(m, x_mie)
     # print(qext, qsca, qback)
+    # exit()
 
 
-    S1_pi, S2_pi = mie.S1_S2(m, x_mie, -1, norm='wiscombe')
-    scatter_field = 2*np.sqrt(np.pi)*S1_pi/k
+    def scattering_amplitude(angle):
+        mu = np.cos(angle)
+        S1, S2 = mie.S1_S2(m, x_mie, mu, norm='wiscombe')
+        S = np.squeeze([S1, S2])/np.sqrt(2) #unpolarized average
+        amplitude = np.sqrt(np.sum(S**2, axis=0))
+        return S/k
 
     # In the scattered field, the absolute is the amplitude and the angle gives the scatter phase.
     # The square of the scatter field gives the backscatter cross section.
-    return scatter_field
+    return scattering_amplitude
 
 #@lru_cache_args(calculate_scatter_field_mie)
 def calculate_scatter_field(multipolar=True, **kwargs):
@@ -594,11 +608,11 @@ def create_params(**kwargs) -> dict:
 
 # User convenience functions for elegant numpy usage
 
-# Scattering only for performance
-def simulate_scattering(**kwargs):
+# backscattering
+def simulate_backscattering(**kwargs):
     """Simulate Mie/dipole scattering"""
     params = create_params(**kwargs)
-    return calculate_scatter_field(**params)
+    return calculate_scatter_field(**params)(np.pi)
 
 def vectorize_array(func, **kwargs):
     """Vectorization with array output"""
