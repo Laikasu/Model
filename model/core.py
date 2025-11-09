@@ -117,6 +117,7 @@ defaults = {
     "pxsize": 3.45e-6,     # micron
     "magnification": 60,
     "scat_mat": "gold",
+    "n_custom": n_ps,
     "x0": 0,               # micron
     "y0": 0,               # micron
     "r_resolution": 50,
@@ -464,13 +465,15 @@ def calculate_scatter_field_dipole(**kwargs):
     
 
     # Check input
-    if scat_mat not in {'gold', 'polystyrene'}:
+    if scat_mat not in {'gold', 'polystyrene', 'custom'}:
         raise ValueError(f'Scattering material {scat_mat} not implemented. Possible values: gold, polystyrene')
 
     if scat_mat == 'gold':
         n_scat = n_gold(wavelen)
-    else:
+    elif scat_mat =='polystyrene':
         n_scat = n_ps
+    else:
+        n_scat = kwargs['n_custom']
 
     # Magnitude and phase of scatter field
     k = 2*np.pi*n_medium/wavelen
@@ -502,13 +505,15 @@ def calculate_scatter_field_anisotropic(**kwargs):
     
 
     # Check input
-    if scat_mat not in {'gold', 'polystyrene'}:
+    if scat_mat not in {'gold', 'polystyrene', 'custom'}:
         raise ValueError(f'Scattering material {scat_mat} not implemented. Possible values: gold, polystyrene')
 
     if scat_mat == 'gold':
         n_scat = n_gold(wavelen)
-    else:
+    elif scat_mat =='polystyrene':
         n_scat = n_ps
+    else:
+        n_scat = kwargs['n_custom']
 
     # Magnitude and phase of scatter field
     k = 2*np.pi*n_medium/wavelen
@@ -571,14 +576,18 @@ def calculate_scatter_field_mie(**kwargs):
     polarization_angle = kwargs['polarization_angle']
     azimuth = kwargs['azimuth']
     a = diameter/2
+    
     # Check input
-    if scat_mat not in {'gold', 'polystyrene'}:
+    # Check input
+    if scat_mat not in {'gold', 'polystyrene', 'custom'}:
         raise ValueError(f'Scattering material {scat_mat} not implemented. Possible values: gold, polystyrene')
 
     if scat_mat == 'gold':
         n_scat = n_gold(wavelen)
-    else:
+    elif scat_mat =='polystyrene':
         n_scat = n_ps
+    else:
+        n_scat = kwargs['n_custom']
 
     # Magnitude and phase of scatter field
     # capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
