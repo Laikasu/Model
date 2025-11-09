@@ -357,7 +357,9 @@ def calculate_propagation(**kwargs):
     e_zy = -2j*I_1*np.sin(camera.phi)
 
     k_0 = -2*np.pi/wavelen
-    return -1j*k_0*np.stack([[e_xx, e_yx, e_zx], [e_xy, e_yy, e_zy]]).transpose((2, 3, 0, 1))
+    return -1j*k_0*np.stack([[e_xx, e_xy],
+                             [e_yx, e_yy],
+                             [e_zx, e_zy]]).transpose((2, 3, 0, 1))
 
 
 def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
@@ -394,19 +396,15 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     if not polarized:
         polarization_azimuth = np.linspace(0, 2*np.pi, 20)
 
-    xyz_polarization = np.array([np.cos(polarization_azimuth),
-        np.sin(polarization_azimuth),
-        np.zeros_like(polarization_azimuth)], dtype=np.complex128)
-                         
-    
-    xyz_to_sp = np.array([[1, 0, 0],
-                         [0, 1, 0]])
-    reference_field = (xyz_to_sp@xyz_polarization).T*E_reference
+    ref_polarization = np.array([np.cos(polarization_azimuth), np.sin(polarization_azimuth)])
+
+    ref_polarization_3d = np.array([np.cos(polarization_azimuth), np.sin(polarization_azimuth), np.zeros_like(polarization_azimuth)]).T
+    reference_field = ref_polarization_3d*E_reference
 
     
     
     if not anisotropic:
-        polarization = xyz_polarization
+        polarization = ref_polarization
         if polarized:
             detector_field = detector_field_components@polarization
         else:
@@ -414,16 +412,14 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     else:
         polarizability_direction = np.array([
             np.cos(inclination)*np.cos(azimuth),
-            np.cos(inclination)*np.sin(azimuth),
-            np.sin(inclination)])
+            np.cos(inclination)*np.sin(azimuth)])
         if polarized:
-            polarization = np.dot(polarizability_direction, xyz_polarization)*polarizability_direction
+            polarization = np.dot(polarizability_direction, ref_polarization)*polarizability_direction
             detector_field = detector_field_components@polarizability_direction
         else:
-            polarization = np.expand_dims(np.dot(polarizability_direction, xyz_polarization), 1)*polarizability_direction
+            polarization = np.expand_dims(np.dot(polarizability_direction, ref_polarization), 1)*polarizability_direction
             detector_field = np.einsum('ijab,kb->ijka', detector_field_components, polarization)
     
-
     # Apply collection efficiency modification
     detector_field *= efficiency
     
