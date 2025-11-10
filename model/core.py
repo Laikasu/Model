@@ -12,52 +12,9 @@ import miepython as mie
 
 from numpy.typing import NDArray
 from scipy.special import jv
-from scipy.integrate import quad, quad_vec
+from scipy.integrate import quad_vec
 from scipy.interpolate import interp1d
 from importlib import resources
-import os
-from collections.abc import Iterable
-
-from functools import lru_cache, wraps
-import inspect
-
-from typing import Literal, TypeAlias
-from collections.abc import Sequence
-
-
-def lru_cache_args(*relevant_functions, maxsize=None):
-    """
-    Decorator that applies lru_cache, but only uses kwargs
-    from the specified functions to form the cache key.
-    This prevents expensive reruns for arguments that don't affect the result.
-    """
-    def decorator(func):
-        relevant_kwargs = set()
-        for f in relevant_functions + (func,):
-            sig = inspect.signature(f)
-            relevant_kwargs.update({
-                name
-                for name, param in sig.parameters.items()
-                if param.default is not inspect._empty
-                and param.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD})
-        # Inner cached function — key is based on relevant args
-        @lru_cache(maxsize=maxsize)
-        def cached_call(args_key, relevant_kwargs_tuple):
-            return func(*args_key, **dict(relevant_kwargs_tuple))
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            # Only include kwargs that were actually passed and are relevant
-            relevant = tuple(sorted(
-                (k, kwargs[k]) for k in relevant_kwargs if k in kwargs
-            ))
-            return cached_call(args, relevant)
-
-        # Preserve cache control methods
-        setattr(wrapper, "cache_clear", cached_call.cache_clear)
-        setattr(wrapper, "cache_info", cached_call.cache_info)
-        return wrapper
-    return decorator
 
 
 # Johnsonn and Christy data for gold
@@ -120,8 +77,8 @@ defaults = {
     "n_custom": n_ps,
     "x0": 0,               # micron
     "y0": 0,               # micron
-    "r_resolution": 50,
-    "efficiency": 1.,   # Determined through experiment
+    "r_resolution": 30,
+    "efficiency": 1.,   # Modification to the E_scat/E_ref ratio
     # Angles / Polarization
     "anisotropic": False,
     "azimuth": 0,           # radians
@@ -281,7 +238,8 @@ def Integral_0(rs, **kwargs):
 
         return (B(0, angle_oil, rs, **kwargs)*
             (E_s*t_s_1*t_s_2 + E_p*t_p_1*t_p_2 * n_eff_medium/n_medium))
-
+    
+    # Vectorized over rs
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
 def Integral_1(rs, **kwargs):
@@ -301,7 +259,8 @@ def Integral_1(rs, **kwargs):
 
         return (B(1, angle_oil, rs, **kwargs)*
             E_p*t_p_1*t_p_2 * n_oil/n_glass * np.sin(angle_oil))
-
+    
+    # Vectorized over rs
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
 def Integral_2(rs, **kwargs):
@@ -324,12 +283,13 @@ def Integral_2(rs, **kwargs):
 
         return (B(2, angle_oil, rs, **kwargs)*
             (E_s*t_s_1*t_s_2 - E_p*t_p_1*t_p_2 * n_eff_medium/n_medium))
+    
 
+    # Vectorized over rs
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
 
 
-#@lru_cache_args(Integral_0, Integral_1, Integral_2, B, Camera.__init__, opd)
 def calculate_propagation(**kwargs):
     """
     Calculate the propagation from particle to camera.
@@ -374,9 +334,6 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
         A custom class containing experimental data
     """
     wavelen = kwargs['wavelen']
-    anisotropic = kwargs['anisotropic']
-    azimuth = kwargs['azimuth']
-    inclination = kwargs['inclination']
     polarization_angle = kwargs['polarization_angle']
     polarized = kwargs['polarized']
     n_medium = kwargs['n_medium']
@@ -392,7 +349,7 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
 
     # Average over angles if unpolarized
     if not polarized:
-        polarization_angle = np.linspace(0, 2*np.pi, 20)
+        polarization_angle = np.linspace(0, 2*np.pi, 100)
 
     ref_polarization = np.array([np.cos(polarization_angle), np.sin(polarization_angle)]).T
 
@@ -402,9 +359,7 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     
     # Polarization handling outside integral. only theta in integral.
     scatter_field = calculate_scatter_field(**kwargs)
-    print(np.abs(scatter_field))
     polarization = scatter_field*ref_polarization
-    print(np.abs(polarization))
     if polarized:
         detector_field = detector_field_components@polarization
     else:
@@ -447,7 +402,7 @@ def calculate_intensities(**kwargs) -> NDArray[np.floating]:
     
     return np.stack([interference_contrast, scatter_contrast])
 
-def calculate_scatter_field_angular(angle, multipolar=True, anisotropic=False, **kwargs):
+def calculate_scatter_field_angular(angle, multipolar=True, **kwargs):
     if multipolar:
         return calculate_scatter_field_mie(angle, **kwargs)/calculate_scatter_field_mie(np.pi, **kwargs)[0]
     else:
@@ -458,53 +413,41 @@ def calculate_scatter_field_dipole(**kwargs):
     n_medium = kwargs['n_medium']
     diameter = kwargs['diameter']
     wavelen = kwargs['wavelen']
-    scat_mat = kwargs['scat_mat']
 
     a = diameter/2
+    n_scat = scatter_RI(**kwargs)
+
     
-
-    # Check input
-    if scat_mat not in {'gold', 'polystyrene', 'custom'}:
-        raise ValueError(f'Scattering material {scat_mat} not implemented. Possible values: gold, polystyrene')
-
-    if scat_mat == 'gold':
-        n_scat = n_gold(wavelen)
-    elif scat_mat =='polystyrene':
-        n_scat = n_ps
-    else:
-        n_scat = kwargs['n_custom']
-
-    # Magnitude and phase of scatter field
     k = 2*np.pi*n_medium/wavelen
     e_scat = n_scat**2
     e_medium = n_medium**2
     polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium)
 
-    #scatter_field = k**2*polarizability/2/np.sqrt(np.pi)
-
-    # polarization conversion from xy, z labframe to phi, theta SP diagonal matrix
     return 1j*k**2/4/np.pi*polarizability
 
+def scatter_RI(**kwargs):
+    scat_mat = kwargs['scat_mat']
+    wavelen = kwargs['wavelen']
+    
+    # Check input
+    if scat_mat not in {'gold', 'polystyrene', 'custom'}:
+        raise ValueError(f'Scattering material {scat_mat} not implemented. Possible values: gold, polystyrene, custom')
+
+    if scat_mat == 'gold':
+        return n_gold(wavelen)
+    elif scat_mat =='polystyrene':
+        return n_ps
+    else:
+        return kwargs['n_custom']
 
 def calculate_scatter_field_anisotropic(**kwargs):
     n_medium = kwargs['n_medium']
     diameter = kwargs['diameter']
     wavelen = kwargs['wavelen']
-    scat_mat = kwargs['scat_mat']
     aspect_ratio = kwargs['aspect_ratio']
     azimuth = kwargs['azimuth']
-    
 
-    # Check input
-    if scat_mat not in {'gold', 'polystyrene', 'custom'}:
-        raise ValueError(f'Scattering material {scat_mat} not implemented. Possible values: gold, polystyrene')
-
-    if scat_mat == 'gold':
-        n_scat = n_gold(wavelen)
-    elif scat_mat =='polystyrene':
-        n_scat = n_ps
-    else:
-        n_scat = kwargs['n_custom']
+    n_scat = scatter_RI(**kwargs)
 
     # Magnitude and phase of scatter field
     k = 2*np.pi*n_medium/wavelen
@@ -552,17 +495,7 @@ def calculate_scatter_field_mie(angle, **kwargs):
     scat_mat = kwargs['scat_mat']
     a = diameter/2
     
-    # Check input
-    # Check input
-    if scat_mat not in {'gold', 'polystyrene', 'custom'}:
-        raise ValueError(f'Scattering material {scat_mat} not implemented. Possible values: gold, polystyrene')
-
-    if scat_mat == 'gold':
-        n_scat = n_gold(wavelen)
-    elif scat_mat =='polystyrene':
-        n_scat = n_ps
-    else:
-        n_scat = kwargs['n_custom']
+    n_scat = scatter_RI(**kwargs)
 
     # Magnitude and phase of scatter field
     # capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
@@ -611,15 +544,15 @@ def calculate_scatter_field_mie(angle, **kwargs):
     S = np.squeeze([S1, S2])
     return S/k
 
-#@lru_cache_args(calculate_scatter_field_mie)
-def calculate_scatter_field(multipolar=True, anisotropic=False, **kwargs):
-    if anisotropic:
-        return calculate_scatter_field_anisotropic(**kwargs)
-    
+def calculate_scatter_field(multipolar=True, **kwargs):
     if multipolar:
         return calculate_scatter_field_mie(np.pi, **kwargs)[0]
     
-    return calculate_scatter_field_dipole(**kwargs)
+    if np.isclose(kwargs['aspect_ratio'], 1):
+        return calculate_scatter_field_dipole(**kwargs)
+    
+    return calculate_scatter_field_anisotropic(**kwargs)
+    
 
 
 microns = {'z_p', 'defocus', 't_oil0', 't_glass0', 't_oil', 't_glass', 'roi_size', 'pxsize', 'x0', 'y0'}
