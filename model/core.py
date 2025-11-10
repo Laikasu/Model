@@ -341,6 +341,7 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     n_medium = kwargs['n_medium']
     efficiency = kwargs['efficiency']
     multipolar = kwargs['multipolar']
+    aspect_ratio = kwargs['aspect_ratio']
     
 
     # Relative signal strength change due to layer boundaries
@@ -354,7 +355,7 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     if not polarized:
         polarization_angle = np.linspace(0, 2*np.pi, 100)
 
-    ref_polarization = np.array([np.cos(polarization_angle), np.sin(polarization_angle)]).T
+    ref_polarization = np.array([np.cos(polarization_angle), np.sin(polarization_angle)])
 
     ref_polarization_3d = np.array([np.cos(polarization_angle), np.sin(polarization_angle), np.zeros_like(polarization_angle)]).T
     reference_field = ref_polarization_3d*E_reference
@@ -363,13 +364,15 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     # Polarization handling outside integral. only theta in integral.
     scatter_field = calculate_scatter_field(**kwargs)
     if multipolar:
-        scatter_field = scatter_field[::-1]*np.array([-1, 1])
+        scatter_field = (scatter_field[::-1]*np.array([-1, 1]))
+    
+    
+    polarization = (scatter_field*np.eye(2))@ref_polarization
 
-    polarization = scatter_field*ref_polarization
     if polarized:
         detector_field = detector_field_components@polarization
     else:
-        detector_field = np.einsum('ijab,kb->ijka', detector_field_components, polarization)
+        detector_field = np.einsum('ijab,bk->ijka', detector_field_components, polarization)
     
     # Apply collection efficiency modification
     detector_field *= efficiency
@@ -460,7 +463,7 @@ def calculate_scatter_field_anisotropic(**kwargs):
 
     a = diameter/2
     c = a*aspect_ratio
-    e = np.sqrt(1 - aspect_ratio**-2)
+    e = np.sqrt(1 - 1/aspect_ratio**2)
     if np.isclose(e, 0):
         L_parallel = 1/3
     elif np.isclose(e, 1):
@@ -478,8 +481,11 @@ def calculate_scatter_field_anisotropic(**kwargs):
     a_perpendicular = pol(L_perpendicular)
     
     # polarizability vector x,y
-    polarizability = np.array([a_parallel*np.cos(azimuth)**2 + a_perpendicular*np.sin(azimuth)**2,
-                               a_perpendicular*np.cos(azimuth)**2 + a_parallel*np.sin(azimuth)**2])
+    R = lambda angle: np.array([[np.cos(angle),-np.sin(angle)],
+                         [np.sin(angle), np.cos(angle)]])
+    
+    polarizability = R(azimuth)@np.array([[a_parallel, 0],
+                            [0, a_perpendicular]])@R(azimuth).T
 
     return k**2/4/np.pi*polarizability
     # if (x > 0.1):
