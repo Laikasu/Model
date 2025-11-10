@@ -317,7 +317,7 @@ def calculate_propagation(**kwargs):
     e_yy = I_0 - I_2*np.cos(2*camera.phi)
     e_zy = -2j*I_1*np.sin(camera.phi)
 
-    k = 2*np.pi*n_medium/wavelen
+    k = -2*np.pi*n_medium/wavelen
     plane_wave_decomp = 1j*k/2/np.pi
     return -plane_wave_decomp*np.stack([[e_xx, e_xy],
                              [e_yx, e_yy],
@@ -377,9 +377,9 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     # effect of inclination on opd
     k = -2*np.pi/wavelen
     detector_field /= np.exp(1j*k*opd_ref(**kwargs))
-    # correct detector field for phase common with reference
 
-    return detector_field, reference_field
+
+    return detector_field, np.ones_like(detector_field)*reference_field
     
 def calculate_intensities(**kwargs) -> NDArray[np.floating]:
     """
