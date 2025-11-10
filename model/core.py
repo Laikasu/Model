@@ -112,7 +112,7 @@ defaults = {
     "defocus": 0,          # um
     "wavelen": 532e-9,     # nm
     "NA": 1.4,
-    "multipolar": True,
+    "multipolar": False,
     "roi_size": 2e-6,      # micron
     "pxsize": 3.45e-6,     # micron
     "magnification": 60,
@@ -277,7 +277,7 @@ def Integral_0(rs, **kwargs):
         t_s_1 = t_s(n_medium, angle_medium, n_glass, angle_glass)
         t_s_2 = t_s(n_glass, angle_glass, n_oil, angle_oil)
         n_eff_medium = np.sqrt(n_medium**2 - n_oil**2*np.sin(angle_oil)**2)
-        E_s, E_p = calculate_scatter_field(**kwargs)(angle_medium)
+        E_s, E_p = calculate_scatter_field_angular(angle_medium, **kwargs)
 
         return (B(0, angle_oil, rs, **kwargs)*
             (E_s*t_s_1*t_s_2 + E_p*t_p_1*t_p_2 * n_eff_medium/n_medium))
@@ -297,7 +297,7 @@ def Integral_1(rs, **kwargs):
         angle_oil = snells_law(n_glass, angle_glass, n_oil)
         t_p_1 = t_p(n_medium, angle_medium, n_glass, angle_glass)
         t_p_2 = t_p(n_glass, angle_glass, n_oil, angle_oil)
-        E_s, E_p = calculate_scatter_field(**kwargs)(angle_medium)
+        E_s, E_p = calculate_scatter_field_angular(angle_medium, **kwargs)
 
         return (B(1, angle_oil, rs, **kwargs)*
             E_p*t_p_1*t_p_2 * n_oil/n_glass * np.sin(angle_oil))
@@ -320,7 +320,7 @@ def Integral_2(rs, **kwargs):
         t_s_1 = t_s(n_medium, angle_medium, n_glass, angle_glass)
         t_s_2 = t_s(n_glass, angle_glass, n_oil, angle_oil)
         n_eff_medium = np.sqrt(n_medium**2 - n_oil**2*np.sin(angle_oil)**2)
-        E_s, E_p = calculate_scatter_field(**kwargs)(angle_medium)
+        E_s, E_p = calculate_scatter_field_angular(angle_medium, **kwargs)
 
         return (B(2, angle_oil, rs, **kwargs)*
             (E_s*t_s_1*t_s_2 - E_p*t_p_1*t_p_2 * n_eff_medium/n_medium))
@@ -394,27 +394,21 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     if not polarized:
         polarization_angle = np.linspace(0, 2*np.pi, 20)
 
-    ref_polarization = np.array([np.cos(polarization_angle), np.sin(polarization_angle)])
+    ref_polarization = np.array([np.cos(polarization_angle), np.sin(polarization_angle)]).T
 
     ref_polarization_3d = np.array([np.cos(polarization_angle), np.sin(polarization_angle), np.zeros_like(polarization_angle)]).T
     reference_field = ref_polarization_3d*E_reference
 
     
-    
-    if not anisotropic:
-        polarization = ref_polarization
-        if polarized:
-            detector_field = detector_field_components@polarization
-        else:
-            detector_field = np.einsum('ijab,bk->ijka', detector_field_components, polarization)
+    # Polarization handling outside integral. only theta in integral.
+    scatter_field = calculate_scatter_field(**kwargs)
+    print(np.abs(scatter_field))
+    polarization = scatter_field*ref_polarization
+    print(np.abs(polarization))
+    if polarized:
+        detector_field = detector_field_components@polarization
     else:
-        polarizability_direction = np.array([np.cos(azimuth), np.sin(azimuth)])
-        if polarized:
-            polarization = np.dot(polarizability_direction, ref_polarization)*polarizability_direction
-            detector_field = detector_field_components@polarizability_direction
-        else:
-            polarization = np.expand_dims(np.dot(polarizability_direction, ref_polarization), 1)*polarizability_direction
-            detector_field = np.einsum('ijab,kb->ijka', detector_field_components, polarization)
+        detector_field = np.einsum('ijab,kb->ijka', detector_field_components, polarization)
     
     # Apply collection efficiency modification
     detector_field *= efficiency
@@ -453,6 +447,11 @@ def calculate_intensities(**kwargs) -> NDArray[np.floating]:
     
     return np.stack([interference_contrast, scatter_contrast])
 
+def calculate_scatter_field_angular(angle, multipolar=True, anisotropic=False, **kwargs):
+    if multipolar:
+        return calculate_scatter_field_mie(angle, **kwargs)/calculate_scatter_field_mie(np.pi, **kwargs)[0]
+    else:
+        return np.array([1, np.cos(angle)])
 
 
 def calculate_scatter_field_dipole(**kwargs):
@@ -483,17 +482,9 @@ def calculate_scatter_field_dipole(**kwargs):
 
     #scatter_field = k**2*polarizability/2/np.sqrt(np.pi)
 
-    def scattering_amplitude(angle):
-        # polarization conversion from xy, z labframe to phi, theta SP diagonal matrix
-        xy_to_sp = np.squeeze([1, np.cos(angle)])
-        polarization = xy_to_sp*polarizability
-        return 1j*k**2/4/np.pi*polarization
-    # if (x > 0.1):
-    #     print("Exceeded bounds of Rayleigh approximation")
-    
-    # 1j delay is not captured in polarizability. The physical origin is the scattered wave being spherical and the incoming being planar.
-    # For the radius of curvature to match it needs an i phase change
-    return scattering_amplitude
+    # polarization conversion from xy, z labframe to phi, theta SP diagonal matrix
+    return 1j*k**2/4/np.pi*polarizability
+
 
 def calculate_scatter_field_anisotropic(**kwargs):
     n_medium = kwargs['n_medium']
@@ -501,7 +492,7 @@ def calculate_scatter_field_anisotropic(**kwargs):
     wavelen = kwargs['wavelen']
     scat_mat = kwargs['scat_mat']
     aspect_ratio = kwargs['aspect_ratio']
-    inclination = kwargs['inclination']
+    azimuth = kwargs['azimuth']
     
 
     # Check input
@@ -538,34 +529,20 @@ def calculate_scatter_field_anisotropic(**kwargs):
     
     a_parallel = pol(L_parallel)
     a_perpendicular = pol(L_perpendicular)
-
-    # From dipole to xy,z labframe
-    R = np.array([[ np.cos(inclination), np.sin(inclination)],
-                  [np.sin(inclination), np.cos(inclination)]])
     
-    # polarizability vector xy, z
-    polarizability = R@np.array([a_parallel, a_perpendicular])
+    # polarizability vector x,y
+    polarizability = np.array([a_parallel*np.cos(azimuth)**2 + a_perpendicular*np.sin(azimuth)**2,
+                               a_perpendicular*np.cos(azimuth)**2 + a_parallel*np.sin(azimuth)**2])
 
-    def scattering_amplitude(angle):
-        # polarization conversion from xy, z labframe to phi, theta SP
-        xyz_to_sp = np.array([[1, 0],
-                            [np.cos(angle), -np.sin(angle)]])
-        
-        xyz_polarization = np.array([np.cos(inclination), np.sin(inclination)])
-        
-        sp_polarization = xyz_to_sp@(polarizability*xyz_polarization)
-
-        return k**2/4/np.pi*sp_polarization*1j
+    return 1j*k**2/4/np.pi*polarizability
     # if (x > 0.1):
     #     print("Exceeded bounds of Rayleigh approximation")
     
     # 1j delay is not captured in polarizability. The physical origin is the scattered wave being spherical and the incoming being planar.
     # For the radius of curvature to match it needs an i phase change
-    return scattering_amplitude
 
 
-
-def calculate_scatter_field_mie(**kwargs):
+def calculate_scatter_field_mie(angle, **kwargs):
     """
     Supports array inputs
     """
@@ -573,8 +550,6 @@ def calculate_scatter_field_mie(**kwargs):
     diameter = kwargs['diameter']
     wavelen = kwargs['wavelen']
     scat_mat = kwargs['scat_mat']
-    polarization_angle = kwargs['polarization_angle']
-    azimuth = kwargs['azimuth']
     a = diameter/2
     
     # Check input
@@ -631,16 +606,10 @@ def calculate_scatter_field_mie(**kwargs):
     # print(qext, qsca, qback)
     # exit()
 
-
-    def scattering_amplitude(angle):
-        mu = np.cos(angle)
-        S1, S2 = mie.S1_S2(m, x_mie, mu, norm='wiscombe')
-        S = np.squeeze([S1, S2])
-        return S/k
-
-    # In the scattered field, the absolute is the amplitude and the angle gives the scatter phase.
-    # The square of the scatter field gives the backscatter cross section.
-    return scattering_amplitude
+    mu = np.cos(angle)
+    S1, S2 = mie.S1_S2(m, x_mie, mu, norm='wiscombe')
+    S = np.squeeze([S1, S2])
+    return S/k
 
 #@lru_cache_args(calculate_scatter_field_mie)
 def calculate_scatter_field(multipolar=True, anisotropic=False, **kwargs):
@@ -648,7 +617,7 @@ def calculate_scatter_field(multipolar=True, anisotropic=False, **kwargs):
         return calculate_scatter_field_anisotropic(**kwargs)
     
     if multipolar:
-        return calculate_scatter_field_mie(**kwargs)
+        return calculate_scatter_field_mie(np.pi, **kwargs)[0]
     
     return calculate_scatter_field_dipole(**kwargs)
 
@@ -681,7 +650,7 @@ def create_params(**kwargs) -> dict:
 def simulate_backscattering(**kwargs):
     """Simulate Mie/dipole scattering"""
     params = create_params(**kwargs)
-    return calculate_scatter_field(**params)(np.pi)
+    return calculate_scatter_field(**params)
 
 def vectorize_array(func, **kwargs):
     """Vectorization with array output"""
