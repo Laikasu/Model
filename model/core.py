@@ -299,6 +299,7 @@ def calculate_propagation(**kwargs):
     """
     wavelen = kwargs['wavelen']
     r_resolution = kwargs['r_resolution']
+    n_medium = kwargs['n_medium']
 
     camera = Camera(**kwargs)
     rs = np.linspace(0, np.max(camera.r), r_resolution)
@@ -316,8 +317,9 @@ def calculate_propagation(**kwargs):
     e_yy = I_0 - I_2*np.cos(2*camera.phi)
     e_zy = -2j*I_1*np.sin(camera.phi)
 
-    k_0 = -2*np.pi/wavelen
-    return -1j*k_0*np.stack([[e_xx, e_xy],
+    k = 2*np.pi*n_medium/wavelen
+    plane_wave_decomp = 1j*k/2/np.pi
+    return -plane_wave_decomp*np.stack([[e_xx, e_xy],
                              [e_yx, e_yy],
                              [e_zx, e_zy]]).transpose((2, 3, 0, 1))
 
@@ -338,6 +340,7 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     polarized = kwargs['polarized']
     n_medium = kwargs['n_medium']
     efficiency = kwargs['efficiency']
+    multipolar = kwargs['multipolar']
     
 
     # Relative signal strength change due to layer boundaries
@@ -359,6 +362,9 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     
     # Polarization handling outside integral. only theta in integral.
     scatter_field = calculate_scatter_field(**kwargs)
+    if multipolar:
+        scatter_field = scatter_field[::-1]*np.array([-1, 1])
+
     polarization = scatter_field*ref_polarization
     if polarized:
         detector_field = detector_field_components@polarization
@@ -370,8 +376,6 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     
     # effect of inclination on opd
     k = -2*np.pi/wavelen
-
-    camera = Camera(**kwargs)
     detector_field /= np.exp(1j*k*opd_ref(**kwargs))
     # correct detector field for phase common with reference
 
@@ -423,7 +427,7 @@ def calculate_scatter_field_dipole(**kwargs):
     e_medium = n_medium**2
     polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium)
 
-    return 1j*k**2/4/np.pi*polarizability
+    return k**2/4/np.pi*polarizability
 
 def scatter_RI(**kwargs):
     scat_mat = kwargs['scat_mat']
@@ -477,7 +481,7 @@ def calculate_scatter_field_anisotropic(**kwargs):
     polarizability = np.array([a_parallel*np.cos(azimuth)**2 + a_perpendicular*np.sin(azimuth)**2,
                                a_perpendicular*np.cos(azimuth)**2 + a_parallel*np.sin(azimuth)**2])
 
-    return 1j*k**2/4/np.pi*polarizability
+    return k**2/4/np.pi*polarizability
     # if (x > 0.1):
     #     print("Exceeded bounds of Rayleigh approximation")
     
@@ -492,7 +496,6 @@ def calculate_scatter_field_mie(angle, **kwargs):
     n_medium = kwargs['n_medium']
     diameter = kwargs['diameter']
     wavelen = kwargs['wavelen']
-    scat_mat = kwargs['scat_mat']
     a = diameter/2
     
     n_scat = scatter_RI(**kwargs)
@@ -542,11 +545,11 @@ def calculate_scatter_field_mie(angle, **kwargs):
     mu = np.cos(angle)
     S1, S2 = mie.S1_S2(m, x_mie, mu, norm='wiscombe')
     S = np.squeeze([S1, S2])
-    return S/k
+    return S/1j/k
 
 def calculate_scatter_field(multipolar=True, **kwargs):
     if multipolar:
-        return calculate_scatter_field_mie(np.pi, **kwargs)[0]
+        return calculate_scatter_field_mie(np.pi, **kwargs)
     
     if np.isclose(kwargs['aspect_ratio'], 1):
         return calculate_scatter_field_dipole(**kwargs)
