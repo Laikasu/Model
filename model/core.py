@@ -364,10 +364,10 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     # Polarization handling outside integral. only theta in integral.
     scatter_field = calculate_scatter_field(**kwargs)
     if multipolar:
-        scatter_field = (scatter_field[::-1]*np.array([-1, 1]))
+        scatter_field = (scatter_field[::-1]*np.array([-1, 1]))*np.eye(2)
     
     
-    polarization = (scatter_field*np.eye(2))@ref_polarization
+    polarization = (scatter_field)@ref_polarization
 
     if polarized:
         detector_field = detector_field_components@polarization
@@ -428,7 +428,7 @@ def calculate_scatter_field_dipole(**kwargs):
     k = 2*np.pi*n_medium/wavelen
     e_scat = n_scat**2
     e_medium = n_medium**2
-    polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium)
+    polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium) *np.eye(2)
 
     return k**2/4/np.pi*polarizability
 
