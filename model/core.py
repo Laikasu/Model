@@ -317,7 +317,7 @@ def calculate_propagation(**kwargs):
     e_yy = I_0 - I_2*np.cos(2*camera.phi)
     e_zy = -2j*I_1*np.sin(camera.phi)
 
-    k = -2*np.pi*n_medium/wavelen
+    k = 2*np.pi*n_medium/wavelen
     plane_wave_decomp = 1j*k/2/np.pi
     return -plane_wave_decomp*np.stack([[e_xx, e_xy],
                              [e_yx, e_yy],
@@ -362,7 +362,7 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
 
     
     # Polarization handling outside integral. only theta in integral.
-    scatter_field = calculate_scatter_field(**kwargs)
+    scatter_field = calculate_scatter_field(**kwargs)*-1j
     if multipolar:
         scatter_field = (scatter_field[::-1]*np.array([-1, 1]))*np.eye(2)
     
