@@ -84,6 +84,7 @@ defaults = {
     "azimuth": 0,           # radians
     "inclination": 0,       # radians
     "polarized": False,
+    "dipole": False,
     "polarization_angle": 0,  # radians
     "aspect_ratio": 1,
 }
@@ -553,11 +554,11 @@ def calculate_scatter_field_mie(angle, **kwargs):
     S = np.squeeze([S1, S2])
     return S/1j/k
 
-def calculate_scatter_field(multipolar=True, **kwargs):
+def calculate_scatter_field(multipolar=True, dipole=False, **kwargs):
     if multipolar:
         return calculate_scatter_field_mie(np.pi, **kwargs)
     
-    if np.isclose(kwargs['aspect_ratio'], 1):
+    if dipole:
         return calculate_scatter_field_dipole(**kwargs)
     
     return calculate_scatter_field_anisotropic(**kwargs)
