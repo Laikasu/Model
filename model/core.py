@@ -458,7 +458,7 @@ def calculate_scatter_field_dipole(**kwargs):
 
     rel_angle = polarization_angle-azimuth
     
-    dir = np.array([np.cos(rel_angle)*np.cos(inclination)*np.cos(azimuth),
+    dir = np.cos(inclination)*np.array([np.cos(rel_angle)*np.cos(inclination)*np.cos(azimuth),
                     np.cos(rel_angle)*np.cos(inclination)*np.sin(azimuth),
                     np.cos(rel_angle)*np.sin(inclination)])
     return k**2/4/np.pi*polarizability*dir
@@ -499,14 +499,21 @@ def calculate_scatter_field_anisotropic(**kwargs):
     
     a_parallel = pol(L_parallel)
     a_perp = pol(L_perp)
-
-    rel_angle = polarization_angle-azimuth
     # both zero -> x a_parallel
     # polarization 45 -> x 1/sqrt(2)
-    polarization = np.array([
-        np.cos(inclination)*(np.cos(rel_angle)*a_parallel + -np.sin(rel_angle)*a_perp),
-        np.cos(inclination)*(np.sin(rel_angle)*a_parallel + np.cos(rel_angle)*a_perp),
-        np.ones_like(polarization_angle)*(np.sin(inclination)*a_parallel + np.cos(inclination)*a_perp)])
+
+    orientation_r = np.array([np.cos(inclination)*np.cos(azimuth), np.cos(inclination)*np.sin(azimuth), np.sin(inclination)])
+    phi = np.array([-np.sin(azimuth), np.cos(azimuth), 0])
+    theta = np.array([-np.sin(inclination)*np.sin(azimuth), -np.sin(inclination)*np.cos(azimuth), np.cos(inclination)])
+
+
+    reference = np.array([np.cos(polarization_angle), np.sin(polarization_angle), np.zeros_like(polarization_angle)])
+
+
+
+    polarization = np.squeeze(np.outer(a_parallel*orientation_r, orientation_r@reference) + 
+                    np.outer(a_perp*phi, phi@reference) + 
+                    np.outer(a_perp*theta, theta@reference))
 
     return k**2/4/np.pi*polarization
     # if (x > 0.1):
