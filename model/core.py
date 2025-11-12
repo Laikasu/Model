@@ -289,6 +289,69 @@ def Integral_2(rs, **kwargs):
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
 
 
+def Integral_0_z(rs, **kwargs):
+    n_medium = kwargs['n_medium']
+    n_glass = kwargs['n_glass']
+    n_oil = kwargs['n_oil']
+    NA = kwargs['NA']
+
+    capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
+
+    def integrand(angle_medium):
+        angle_glass = snells_law(n_medium, angle_medium, n_glass)
+        angle_oil = snells_law(n_medium, angle_medium, n_oil)
+        t_p_1 = t_p(n_medium, angle_medium, n_glass, angle_glass)
+        t_p_2 = t_p(n_glass, angle_glass, n_oil, angle_oil)
+        n_eff_medium = np.sqrt(n_medium**2 - n_oil**2*np.sin(angle_oil)**2)
+        return (B(0, angle_oil, rs, **kwargs)*
+            (np.sin(angle_medium)*t_p_1*t_p_2 * n_eff_medium/n_medium))
+    
+    # Vectorized over rs
+    return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
+
+def Integral_1_z(rs, **kwargs):
+    n_medium = kwargs['n_medium']
+    n_glass = kwargs['n_glass']
+    n_oil = kwargs['n_oil']
+    NA = kwargs['NA']
+
+    capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
+
+    def integrand(angle_medium):
+        angle_glass = snells_law(n_medium, angle_medium, n_glass)
+        angle_oil = snells_law(n_glass, angle_glass, n_oil)
+        t_p_1 = t_p(n_medium, angle_medium, n_glass, angle_glass)
+        t_p_2 = t_p(n_glass, angle_glass, n_oil, angle_oil)
+
+        return (B(1, angle_oil, rs, **kwargs)*
+            np.sin(angle_medium)*t_p_1*t_p_2 * n_oil/n_glass * np.sin(angle_oil))
+    
+    # Vectorized over rs
+    return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
+
+def Integral_2_z(rs, **kwargs):
+    n_medium = kwargs['n_medium']
+    n_glass = kwargs['n_glass']
+    n_oil = kwargs['n_oil']
+    NA = kwargs['NA']
+
+    capture_angle_medium = np.arcsin(min(NA/n_medium, 1))
+
+    def integrand(angle_medium):
+        angle_glass = snells_law(n_medium, angle_medium, n_glass)
+        angle_oil = snells_law(n_glass, angle_glass, n_oil)
+        t_p_1 = t_p(n_medium, angle_medium, n_glass, angle_glass)
+        t_p_2 = t_p(n_glass, angle_glass, n_oil, angle_oil)
+        n_eff_medium = np.sqrt(n_medium**2 - n_oil**2*np.sin(angle_oil)**2)
+
+        return -(B(2, angle_oil, rs, **kwargs)*
+            (np.sin(angle_medium)*t_p_1*t_p_2 * n_eff_medium/n_medium))
+    
+
+    # Vectorized over rs
+    return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
+
+
 
 def calculate_propagation(**kwargs):
     """
@@ -307,6 +370,10 @@ def calculate_propagation(**kwargs):
     I_0 = interp1d(rs, Integral_0(rs, **kwargs))(camera.r)
     I_1 = interp1d(rs, Integral_1(rs, **kwargs))(camera.r)
     I_2 = interp1d(rs, Integral_2(rs, **kwargs))(camera.r)
+
+    I_0_z = interp1d(rs, Integral_0(rs, **kwargs))(camera.r)
+    I_1_z = interp1d(rs, Integral_1(rs, **kwargs))(camera.r)
+    I_2_z = interp1d(rs, Integral_2(rs, **kwargs))(camera.r)
     
     # Components for x polarization
     e_xx = I_0 + I_2*np.cos(2*camera.phi)
@@ -317,11 +384,15 @@ def calculate_propagation(**kwargs):
     e_yy = I_0 - I_2*np.cos(2*camera.phi)
     e_zy = -2j*I_1*np.sin(camera.phi)
 
+    e_xz = I_0_z + I_2_z*np.cos(2*camera.phi) + I_2_z*np.sin(2*camera.phi)
+    e_yz = I_2_z*np.sin(2*camera.phi) + I_0_z - I_2_z*np.cos(2*camera.phi)
+    e_zz = -4j*I_1_z*np.sin(camera.phi)
+
     k = 2*np.pi*n_medium/wavelen
     plane_wave_decomp = 1j*k/2/np.pi
-    return -plane_wave_decomp*np.stack([[e_xx, e_xy],
-                             [e_yx, e_yy],
-                             [e_zx, e_zy]]).transpose((2, 3, 0, 1))
+    return -plane_wave_decomp*np.stack([[e_xx, e_xy, e_xz],
+                             [e_yx, e_yy, e_yz],
+                             [e_zx, e_zy, e_zz]]).transpose((2, 3, 0, 1))
 
 
 def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
@@ -341,7 +412,6 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     n_medium = kwargs['n_medium']
     efficiency = kwargs['efficiency']
     multipolar = kwargs['multipolar']
-    aspect_ratio = kwargs['aspect_ratio']
     
 
     # Relative signal strength change due to layer boundaries
@@ -364,10 +434,13 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     # Polarization handling outside integral. only theta in integral.
     scatter_field = calculate_scatter_field(**kwargs)*-1j
     if multipolar:
-        scatter_field = (scatter_field[::-1]*np.array([-1, 1]))*np.eye(2)
+        scatter_field = (scatter_field[::-1]*np.array([-1, 1]))*np.eye(3)
     
     
-    polarization = (scatter_field)@ref_polarization
+    print(scatter_field.shape)
+    polarization = scatter_field@ref_polarization_3d.T
+    print(polarization)
+    # This should not have a z-components. it should already be projected onto x and y.
 
     if polarized:
         detector_field = detector_field_components@polarization
@@ -415,23 +488,6 @@ def calculate_scatter_field_angular(angle, multipolar=True, **kwargs):
     else:
         return np.array([1, np.cos(angle)])
 
-
-def calculate_scatter_field_dipole(**kwargs):
-    n_medium = kwargs['n_medium']
-    diameter = kwargs['diameter']
-    wavelen = kwargs['wavelen']
-
-    a = diameter/2
-    n_scat = scatter_RI(**kwargs)
-
-    
-    k = 2*np.pi*n_medium/wavelen
-    e_scat = n_scat**2
-    e_medium = n_medium**2
-    polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium) *np.eye(2)
-
-    return k**2/4/np.pi*polarizability
-
 def scatter_RI(**kwargs):
     scat_mat = kwargs['scat_mat']
     wavelen = kwargs['wavelen']
@@ -447,12 +503,35 @@ def scatter_RI(**kwargs):
     else:
         return kwargs['n_custom']
 
+def calculate_scatter_field_dipole(**kwargs):
+    n_medium = kwargs['n_medium']
+    diameter = kwargs['diameter']
+    wavelen = kwargs['wavelen']
+    polarization_angle = kwargs['polarization_angle']
+
+    a = diameter/2
+    n_scat = scatter_RI(**kwargs)
+
+    
+    k = 2*np.pi*n_medium/wavelen
+    e_scat = n_scat**2
+    e_medium = n_medium**2
+    polarizability = 4*np.pi*a**3*(e_scat-e_medium)/(e_scat + 2*e_medium)
+
+    ref_polarization_3d = np.array([np.cos(polarization_angle), np.sin(polarization_angle), 0])
+
+    return k**2/4/np.pi*polarizability*ref_polarization_3d
+
+
+
 def calculate_scatter_field_anisotropic(**kwargs):
     n_medium = kwargs['n_medium']
     diameter = kwargs['diameter']
     wavelen = kwargs['wavelen']
     aspect_ratio = kwargs['aspect_ratio']
     azimuth = kwargs['azimuth']
+    inclination = kwargs['azimuth']
+    polarization_angle = kwargs['polarization_angle']
 
     n_scat = scatter_RI(**kwargs)
 
@@ -470,7 +549,7 @@ def calculate_scatter_field_anisotropic(**kwargs):
         L_parallel = 0
     else:
         L_parallel = (1-e**2)/e**2 * (np.log((1+e)/(1-e))/2/e - 1)
-    L_perpendicular = (1 - L_parallel)/2
+    L_perp = (1 - L_parallel)/2
 
     V = np.pi*a**2*c*4/3
     pol = lambda L: V*(e_scat - e_medium)/(e_medium + L*(
@@ -478,16 +557,17 @@ def calculate_scatter_field_anisotropic(**kwargs):
 
     
     a_parallel = pol(L_parallel)
-    a_perpendicular = pol(L_perpendicular)
-    
-    # polarizability vector x,y
-    R = lambda angle: np.array([[np.cos(angle),-np.sin(angle)],
-                         [np.sin(angle), np.cos(angle)]])
-    
-    polarizability = R(azimuth)@np.array([[a_parallel, 0],
-                            [0, a_perpendicular]])@R(azimuth).T
+    a_perp = pol(L_perp)
 
-    return k**2/4/np.pi*polarizability
+    rel_angle = polarization_angle-azimuth
+    # both zero -> x a_parallel
+    # polarization 45 -> x 1/sqrt(2)
+    polarization = np.array[
+        np.cos(inclination)*(np.cos(rel_angle)*a_parallel + -np.sin(rel_angle)*a_perp),
+        np.cos(inclination)*(np.sin(rel_angle)*a_parallel + np.cos(rel_angle)*a_perp),
+        np.sin(inclination)*a_parallel + np.cos(inclination)*a_perp]
+
+    return k**2/4/np.pi*polarization
     # if (x > 0.1):
     #     print("Exceeded bounds of Rayleigh approximation")
     
