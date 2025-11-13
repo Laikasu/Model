@@ -368,9 +368,10 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
         s = s[:,:,None]
         c = c[:,:,None]
     
-    ref_polarization_ps = np.moveaxis(np.array([-s*ref_x + c*ref_y,
-                           c*ref_x + s*ref_y]),0,-1)
-    reference_field = ref_polarization_ps*E_reference
+    # ref_polarization_ps = np.moveaxis(np.array([-s*ref_x + c*ref_y,
+    #                        c*ref_x + s*ref_y]),0,-1)
+    
+    
 
     
     # Polarization handling outside integral. only theta in integral.
@@ -384,6 +385,9 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     
     # Apply collection efficiency modification
     detector_field *= efficiency
+
+    ref_polarization_ps = np.array([ref_x, ref_y]).T*np.ones_like(detector_field)
+    reference_field = ref_polarization_ps*E_reference
     
     # effect of inclination on opd
     k = -2*np.pi/wavelen
