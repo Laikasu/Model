@@ -234,11 +234,10 @@ def Integral_0(rs, **kwargs):
         t_p_2 = t_p(n_glass, angle_glass, n_oil, angle_oil)
         t_s_1 = t_s(n_medium, angle_medium, n_glass, angle_glass)
         t_s_2 = t_s(n_glass, angle_glass, n_oil, angle_oil)
-        n_eff_medium = np.sqrt(n_medium**2 - n_oil**2*np.sin(angle_oil)**2)
         E_s, E_p = calculate_scatter_field_angular(angle_medium, **kwargs)
 
         return (B(0, angle_oil, rs, **kwargs)*
-            (t_s_1*t_s_2 + t_p_1*t_p_2 * n_eff_medium/n_medium))
+            (E_s*t_s_1*t_s_2 + E_p*t_p_1*t_p_2))
     
     # Vectorized over rs
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
@@ -256,10 +255,9 @@ def Integral_1(rs, **kwargs):
         angle_oil = snells_law(n_glass, angle_glass, n_oil)
         t_p_1 = t_p(n_medium, angle_medium, n_glass, angle_glass)
         t_p_2 = t_p(n_glass, angle_glass, n_oil, angle_oil)
-        E_s, E_p = calculate_scatter_field_angular(angle_medium, **kwargs)
 
         return (B(1, angle_oil, rs, **kwargs)*
-            t_p_1*t_p_2 * n_oil/n_glass * np.sin(angle_oil))
+            t_p_1*t_p_2 * np.sin(angle_medium))
     
     # Vectorized over rs
     return quad_vec(integrand, 0, capture_angle_medium, epsrel=epsrel)[0]
@@ -279,11 +277,10 @@ def Integral_2(rs, **kwargs):
         t_p_2 = t_p(n_glass, angle_glass, n_oil, angle_oil)
         t_s_1 = t_s(n_medium, angle_medium, n_glass, angle_glass)
         t_s_2 = t_s(n_glass, angle_glass, n_oil, angle_oil)
-        n_eff_medium = np.sqrt(n_medium**2 - n_oil**2*np.sin(angle_oil)**2)
-        E_s, E_p = calculate_scatter_field_angular(angle_medium, **kwargs)
+        E_S, E_P = calculate_scatter_field_angular(angle_medium, **kwargs)
 
         return (B(2, angle_oil, rs, **kwargs)*
-            (t_s_1*t_s_2 - t_p_1*t_p_2 * n_eff_medium/n_medium))
+            (E_S*t_s_1*t_s_2 - E_P*t_p_1*t_p_2))
     
 
     # Vectorized over rs
@@ -355,28 +352,11 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
         polarization_angle = np.linspace(0, 2*np.pi, 100)
         kwargs['polarization_angle'] = polarization_angle
     
-
-    ref_x = np.cos(polarization_angle)
-    ref_y = np.sin(polarization_angle)
-
-    camera = Camera(**kwargs)
-
-    s = np.sin(camera.phi)
-    c = np.cos(camera.phi)
-
-    if not polarized:
-        s = s[:,:,None]
-        c = c[:,:,None]
-    
-    # ref_polarization_ps = np.moveaxis(np.array([-s*ref_x + c*ref_y,
-    #                        c*ref_x + s*ref_y]),0,-1)
-    
     
 
     
-    # Polarization handling outside integral. only theta in integral.
+    # the first is the x-component, the second y.
     scatter_field = calculate_scatter_field(**kwargs)*-1j
-    # This should not have a z-components. it should already be projected onto x and y.
 
     if polarized:
         detector_field = detector_field_components@scatter_field
@@ -386,8 +366,8 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     # Apply collection efficiency modification
     detector_field *= efficiency
 
-    ref_polarization_ps = np.array([ref_x, ref_y]).T*np.ones_like(detector_field)
-    reference_field = ref_polarization_ps*E_reference
+    ref_polarization = np.array([np.cos(polarization_angle), np.sin(polarization_angle)]).T*np.ones_like(detector_field)
+    reference_field = ref_polarization*E_reference
     
     # effect of inclination on opd
     k = -2*np.pi/wavelen
@@ -423,7 +403,7 @@ def calculate_intensities(**kwargs) -> NDArray[np.floating]:
 
 def calculate_scatter_field_angular(angle, multipolar=True, **kwargs):
     if multipolar:
-        return calculate_scatter_field_mie(angle, **kwargs)/calculate_scatter_field_mie(np.pi, **kwargs)[0]
+        return calculate_scatter_field_mie(angle, **kwargs)/calculate_scatter_field_mie(0, **kwargs)[0]
     else:
         return np.array([1, np.cos(angle)])
 
@@ -508,7 +488,7 @@ def calculate_scatter_field_anisotropic(**kwargs):
 
     orientation_r = np.array([np.cos(inclination)*np.cos(azimuth), np.cos(inclination)*np.sin(azimuth), np.sin(inclination)])
     phi = np.array([-np.sin(azimuth), np.cos(azimuth), 0])
-    theta = np.array([-np.sin(inclination)*np.sin(azimuth), -np.sin(inclination)*np.cos(azimuth), np.cos(inclination)])
+    theta = np.array([-np.sin(inclination)*np.cos(azimuth), -np.sin(inclination)*np.sin(azimuth), np.cos(inclination)])
 
 
     reference = np.array([np.cos(polarization_angle), np.sin(polarization_angle), np.zeros_like(polarization_angle)])
@@ -580,14 +560,15 @@ def calculate_scatter_field_mie(angle, **kwargs):
     # print(qext, qsca, qback)
     # exit()
 
-    mu = np.cos(angle)
+    mu = -np.cos(angle)
     S1, S2 = mie.S1_S2(m, x_mie, mu, norm='wiscombe')
     S = np.squeeze([S1, S2])
     return S/1j/k
 
 def calculate_scatter_field(multipolar=True, dipole=False, **kwargs):
     if multipolar:
-        return calculate_scatter_field_mie(np.pi, **kwargs)
+        polarization_angle = kwargs['polarization_angle']
+        return calculate_scatter_field_mie(0, **kwargs)[0]*np.array([np.cos(polarization_angle), np.sin(polarization_angle), np.zeros_like(polarization_angle)])
     
     if dipole:
         return calculate_scatter_field_dipole(**kwargs)
