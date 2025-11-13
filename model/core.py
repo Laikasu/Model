@@ -17,6 +17,8 @@ from scipy.interpolate import interp1d
 from importlib import resources
 
 
+# Gold
+
 # Johnsonn and Christy data for gold
 # https://refractiveindex.info/?shelf=main&book=Au&page=Johnson
 with resources.files("model").joinpath('Johnson.csv').open("r") as file:
@@ -43,6 +45,10 @@ def drude_gold(wavelen):
     drude = -f * res_p**2 / (freq_eV**2 + 1j*freq_eV*damping)
     epsilon = 1 + drude
     return np.sqrt(epsilon)
+
+
+
+# Parameters
 
 # constants
 n_ps = 1.5537
@@ -110,7 +116,7 @@ def create_params(**kwargs) -> dict:
 
     return params
 
-    
+
 
 class Camera():
     """Helper class to handle coordinate conversions"""
@@ -422,7 +428,7 @@ def calculate_intensities(**kwargs) -> NDArray[np.floating]:
 
 def calculate_scatter_field_angular(angle, multipolar=True, **kwargs):
     if multipolar:
-        return calculate_scatter_field_mie(angle, **kwargs)/calculate_scatter_field_mie(0, **kwargs)[0]
+        return calculate_scatter_field_mie(angle, **kwargs)/calculate_scatter_field_mie(0, **kwargs)
     else:
         return np.array([1, np.cos(angle)])
 
