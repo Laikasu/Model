@@ -60,18 +60,18 @@ defaults = {
     "n_glass0": n_glass,
     "n_oil0": n_oil,
     "n_oil": n_oil,
-    "t_oil0": 100e-6,       # micron
-    "t_oil": 100e-6,       # micron
-    "t_glass0": 170e-6,    # micron
-    "t_glass": 170e-6,     # micron
-    "diameter": 30e-9,     # nm
+    "t_oil0": 100,       # micron
+    "t_oil": 100,       # micron
+    "t_glass0": 170,    # micron
+    "t_glass": 170,     # micron
+    "diameter": 30,     # nm
     "z_p": 0,              # micron
     "defocus": 0,          # um
-    "wavelen": 532e-9,     # nm
+    "wavelen": 532,     # nm
     "NA": 1.4,
     "multipolar": False,
-    "roi_size": 2e-6,      # micron
-    "pxsize": 3.45e-6,     # micron
+    "roi_size": 2,      # micron
+    "pxsize": 3.45,     # micron
     "magnification": 60,
     "scat_mat": "gold",
     "n_custom": n_ps,
@@ -81,14 +81,34 @@ defaults = {
     "efficiency": 1.,   # Modification to the E_scat/E_ref ratio
     # Angles / Polarization
     "anisotropic": False,
-    "azimuth": 0,           # radians
-    "inclination": 0,       # radians
+    "azimuth": 0,
+    "inclination": 0,
     "polarized": False,
     "dipole": False,
-    "polarization_angle": 0,  # radians
+    "polarization_angle": 0,
     "aspect_ratio": 1,
 }
 
+# units
+microns = {'z_p', 'defocus', 't_oil0', 't_glass0', 't_oil', 't_glass', 'roi_size', 'pxsize', 'x0', 'y0'}
+nanometers = {'wavelen', 'diameter'}
+degrees = {'azimuth', 'inclination', 'polarization_angle'}
+
+
+def create_params(**kwargs) -> dict:
+    """Insert defaults and convert units"""
+    # Default insertion
+    params = {**defaults, **kwargs}
+
+    # Unit conversion
+    for um in microns:
+        params[um] = params[um]*10**-6
+    for nm in nanometers:
+        params[nm] = params[nm]*10**-9
+    for deg in degrees:
+        params[deg] = np.radians(params[deg])
+
+    return params
 
     
 
@@ -573,29 +593,8 @@ def calculate_scatter_field(multipolar=True, dipole=False, **kwargs):
         return calculate_scatter_field_dipole(**kwargs)
     
     return calculate_scatter_field_anisotropic(**kwargs)
-    
 
 
-microns = {'z_p', 'defocus', 't_oil0', 't_glass0', 't_oil', 't_glass', 'roi_size', 'pxsize', 'x0', 'y0'}
-nanometers = {'wavelen', 'diameter'}
-degrees = {'azimuth', 'inclination', 'polarization_angle'}
-
-def create_params(**kwargs) -> dict:
-    # Unit conversions
-    for um in microns:
-        if um in kwargs.keys():
-            kwargs[um] = kwargs[um]*10**-6
-    
-    for nm in nanometers:
-        if nm in kwargs.keys():
-            kwargs[nm] = kwargs[nm]*10**-9
-    
-    for deg in degrees:
-        if deg in kwargs.keys():
-            kwargs[deg] = np.radians(kwargs[deg])
-    
-
-    return {**defaults, **kwargs}
 
 
 # User convenience functions for elegant numpy usage
