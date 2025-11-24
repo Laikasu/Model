@@ -40,10 +40,10 @@ def drude_gold(wavelen):
     res_p = 9.06
     
 
-    freq_eV = const.h * const.c / (wavelen * 1e-9) / const.e
+    freq_eV = const.h * const.c / (wavelen) / const.e
 
     drude = -f * res_p**2 / (freq_eV**2 + 1j*freq_eV*damping)
-    epsilon = 1 + drude
+    epsilon = 9 + drude
     return np.sqrt(epsilon)
 
 
@@ -502,12 +502,12 @@ def calculate_scatter_field_anisotropic(**kwargs):
     L_perp = (1 - L_parallel)/2
 
     V = np.pi*a**2*c*4/3
-    pol = lambda L: V*(e_scat - e_medium)/(e_medium + L*(
+    polarizability = lambda L: V*(e_scat - e_medium)/(e_medium + L*(
          e_scat - e_medium))
 
     
-    a_parallel = pol(L_parallel)
-    a_perp = pol(L_perp)
+    a_parallel = polarizability(L_parallel)
+    a_perp = polarizability(L_perp)
     # both zero -> x a_parallel
     # polarization 45 -> x 1/sqrt(2)
 
@@ -520,7 +520,8 @@ def calculate_scatter_field_anisotropic(**kwargs):
 
 
 
-    polarization = np.squeeze(np.outer(a_parallel*orientation_r, orientation_r@reference) + 
+    polarization = np.squeeze(
+                    np.outer(a_parallel*orientation_r, orientation_r@reference) + 
                     np.outer(a_perp*phi, phi@reference) + 
                     np.outer(a_perp*theta, theta@reference))
 
@@ -591,8 +592,8 @@ def calculate_scatter_field_mie(angle, **kwargs):
     return S/1j/k
 
 def calculate_scatter_field(multipolar=True, dipole=False, **kwargs):
+    polarization_angle = kwargs['polarization_angle']
     if multipolar:
-        polarization_angle = kwargs['polarization_angle']
         return calculate_scatter_field_mie(0, **kwargs)[0]*np.array([np.cos(polarization_angle), np.sin(polarization_angle), np.zeros_like(polarization_angle)])
     
     if dipole:
@@ -609,14 +610,16 @@ def calculate_scatter_field(multipolar=True, dipole=False, **kwargs):
 def simulate_backscattering(**kwargs):
     """Simulate Mie/dipole scattering"""
     params = create_params(**kwargs)
-    return calculate_scatter_field(**params)
+
+    scatter_field = np.squeeze(vectorize_array(calculate_scatter_field, **params))
+    return scatter_field[0]
 
 def vectorize_array(func, **kwargs):
     """Vectorization with array output"""
     # Vectorize loses type
     ret = np.vectorize(func, otypes=[np.ndarray])(**kwargs)
     
-    stack = np.stack(ret)
+    stack = np.array(ret)
     if stack.dtype == object:
         stack = np.array(stack.tolist())
     
