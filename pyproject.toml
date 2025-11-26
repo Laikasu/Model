@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "model"                # The name you'll use in imports: `import model`
-version = "0.1.1"
+version = "0.1.2"
 description = "Reusable model package for analysis"
 authors = [{ name = "Casper", email = "c.f.d.ly@student.tue.nl" }]
 readme = "README.md"          # optional but good practice

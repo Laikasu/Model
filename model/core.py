@@ -75,7 +75,7 @@ defaults = {
     "defocus": 0,          # um
     "wavelen": 532,     # nm
     "NA": 1.4,
-    "multipolar": False,
+    "multipolar": True,
     "roi_size": 2,      # micron
     "pxsize": 3.45,     # micron
     "magnification": 60,
@@ -83,7 +83,6 @@ defaults = {
     "n_custom": n_ps,
     "x0": 0,               # micron
     "y0": 0,               # micron
-    "r_resolution": 30,
     "efficiency": 1.,   # Modification to the E_scat/E_ref ratio
     # Angles / Polarization
     "anisotropic": False,
@@ -105,6 +104,11 @@ def create_params(**kwargs) -> dict:
     """Insert defaults and convert units"""
     # Default insertion
     params = {**defaults, **kwargs}
+    
+    # Multipolar default on for aspect ratio 1
+    if not params['dipole']:
+        params['multipolar'] = np.isclose(params['aspect_ratio'],1.0)
+    else: params['multipolar'] = False
 
     # Unit conversion
     for um in microns:
@@ -322,10 +326,11 @@ def calculate_propagation(**kwargs):
     [Es, Ep] = M [Ex, Ey, Ez]
     """
     wavelen = kwargs['wavelen']
-    r_resolution = kwargs['r_resolution']
     n_medium = kwargs['n_medium']
 
     camera = Camera(**kwargs)
+    # 2 for every pixel
+    r_resolution = camera.pixels+1
     rs = np.linspace(0, np.max(camera.r), r_resolution)
 
     I_0 = interp1d(rs, Integral_0(rs, **kwargs))(camera.r)
@@ -634,7 +639,6 @@ def simulate_center(**kwargs) -> NDArray[np.float64]:
     """Simulate only the center pixel"""
     params = create_params(**kwargs)
     # Single pixel
-    params['r_resolution'] = 2
     roi_size = params['pxsize']/params['magnification']
     params['roi_size'] = roi_size
 
@@ -645,7 +649,6 @@ def simulate_field(**kwargs) -> NDArray[np.complex128]:
     """Simulate the field at the center pixel"""
     params = create_params(**kwargs)
     # Single pixel
-    params['r_resolution'] = 2
     roi_size = params['pxsize']/params['magnification']
     params['roi_size'] = roi_size
 

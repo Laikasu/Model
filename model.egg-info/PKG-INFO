@@ -1,11 +1,13 @@
 Metadata-Version: 2.4
 Name: model
-Version: 0.1.0
+Version: 0.1.1
 Summary: Reusable model package for analysis
-Author-email: "Casper]" <c.f.d.ly@student.tue.nl>
+Author-email: Casper <c.f.d.ly@student.tue.nl>
 Requires-Python: >=3.8
 Description-Content-Type: text/markdown
 Requires-Dist: miepython
+Requires-Dist: numpy
+Requires-Dist: scipy
 
 # iPSF Simulation  
 
