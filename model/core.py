@@ -244,7 +244,7 @@ def B(n, angle_oil, rs, **kwargs):
     wavelen = kwargs['wavelen']
     n_oil = kwargs['n_oil']
 
-    k_0 = -2*np.pi/wavelen
+    k_0 = 2*np.pi/wavelen
     return np.sqrt(np.cos(angle_oil))*np.sin(angle_oil)*jv(n, k_0*rs*n_oil*np.sin(angle_oil))*np.exp(1j*k_0*opd(angle_oil, **kwargs))
 
 
@@ -400,8 +400,8 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
     reference_field = ref_polarization*E_reference
     
     # effect of inclination on opd
-    k = -2*np.pi/wavelen
-    detector_field /= np.exp(1j*k*opd_ref(**kwargs))
+    k_0 = 2*np.pi/wavelen
+    detector_field /= np.exp(1j*k_0*opd_ref(**kwargs))
 
 
     return detector_field, reference_field
