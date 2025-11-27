@@ -347,8 +347,8 @@ def calculate_propagation(**kwargs):
     e_sz = -2j*I_1*np.sin(camera.phi)
 
     k = 2*np.pi*n_medium/wavelen
-    plane_wave_decomp = 1j*k/2/np.pi
-    return -plane_wave_decomp*np.stack([[e_px, e_py, e_pz],
+    factor = -1j*k/2
+    return factor*np.stack([[e_px, e_py, e_pz],
                                         [e_sx, e_sy, e_sz]]).transpose((2, 3, 0, 1))
 
 
