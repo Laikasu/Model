@@ -394,7 +394,7 @@ def calculate_fields(**kwargs) -> tuple[NDArray[np.complex128], NDArray[np.compl
         detector_field = np.einsum('ijab,bk->ijka', detector_field_components, scatter_field)
     
     # Apply collection efficiency modification
-    detector_field *= efficiency
+    detector_field *= efficiency*(1-r_gm)
 
     ref_polarization = np.array([np.cos(polarization_angle), np.sin(polarization_angle)]).T*np.ones_like(detector_field)
     reference_field = ref_polarization*E_reference
